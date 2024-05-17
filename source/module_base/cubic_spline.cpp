@@ -308,6 +308,12 @@ void CubicSpline::eval(
 }
 
 
+void CubicSpline::scale(const double k)
+{
+    std::for_each(y_.begin(), y_.end(), [k](double& y) { y *= k; });
+}
+
+
 void CubicSpline::_validate_build(
     int n,
     const double* dx,

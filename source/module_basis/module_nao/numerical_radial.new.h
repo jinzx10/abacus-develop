@@ -10,51 +10,11 @@
 /**
  * @brief Numerical radial function.
  *
- * This class is designed to be the container for the radial part of
- * numerical atomic orbitals, Kleinman-Bylander beta functions, and all
- * other similar numerical radial functions in three-dimensional space,
- * each of which is associated with some angular momentum l and whose r
- * and k space values are related by an l-th order spherical Bessel transform.
- *
- * A NumericalRadial object can be initialized by "build", which requires
- * the angular momentum, the number of grid points, the grid and the
- * corresponding values. Grid does not have to be uniform. One can initialize
- * the object in either r or k space. After initialization, one can set the
- * grid in the other space via set_grid or set_uniform_grid. Values in the
- * other space are automatically computed by a spherical Bessel transform.
- *
- * Usage:
- *
- *      // Prepares the grid & values to initialize the objects
- *      int sz = 2000;
- *      double dr = 0.01;
- *      double* grid = new double[sz];
- *      for (int ir = 0; ir != sz; ++ir) {
- *          grid[ir] = ir * dr; 
- *          f[ir] = std::exp(-grid[ir] * grid[ir]);
- *      }
- *      // grid does not necessarily have to be uniform; it just
- *      // has to be positive and strictly increasing.
- *
- *      // The class will interpret the input values as r^p * F(r)
- *      // where F is the underlying radial function that the class object
- *      // actually represents.
- *      int p1 = 0;
- *      int p2 = -2;
- *
- *       
- *      NumericalRadial chi1();
- *      NumericalRadial chi2;
- *      chi1.build(0, true, sz, grid, f, p1);
- *      chi2.build(2, true, sz, grid, f, p2);
- *
- *      // Now chi1 represents exp(-r^2); chi2 actually represents
- *      // r^2*exp(-r^2), even though the values stored is also exp(-r^2).
- *
- *      // Adds the k-space grid.
- *      chi1.set_uniform_grid(false, sz, PI/dr, 't');
- *      chi2.set_uniform_grid(false, sz, PI/dr, 't');
- *      // k-space values are automatically computed above
+ * This container is supposed to hold the radial part of a pseudo-atomic orbital
+ * ([radial] x [spherical harmonic]) which has some cutoff radius in some space,
+ * like numerical atomic orbitals, Kleinman-Bylander beta functions, etc. Such
+ * a radial function is associated with some angular momentum l, and its values
+ * in r & k space are related by an l-th order spherical Bessel transform.
  *
  */
 class NumericalRadial
@@ -73,15 +33,26 @@ public:
     NumericalRadial& operator=(NumericalRadial); // copy-swap idiom
 
     /**
-     * @brief Initializes the object by providing the grid & values in one space.
+     * @brief Initializes the object in the space with strict cutoff.
+     *
+     * This constructor initializes the object with the given angular momentum,
+     * number of grid points, cutoff radius, and values on the grid. The grid is
+     * assumed to be uniform:
+     *
+     *                    cutoff
+     *      grid[i] = i * -------
+     *                    ngrid-1
+     *
+     * and the value may carry an extra exponent p than what the object is supposed
+     * to represent (see @ref p_ for details).
      *
      * @param[in]   l           angular momentum
      * @param[in]   ngrid       number of grid points
      * @param[in]   cutoff      cutoff radius
      * @param[in]   value       values on the grid
-     * @param[in]   space       specifies whether the input grid & values are r or k space
+     * @param[in]   space       the space (r or k) of inputs
      * @param[in]   normalize   whether to normalize the radial function
-     * @param[in]   p           implicit exponent in input values (see @ref pr_ & @ref pk_)
+     * @param[in]   p           extra exponent in input values
      * @param[in]   sbt         a user-provided spherical Bessel transformer
      *
      */
@@ -97,19 +68,28 @@ public:
     );
 
 
-    /** 
-     * @brief Sets a SphericalBesselTransformer.
-     * 
-     * By default the class uses its own SphericalBesselTransformer in cache-disabled
-     * mode. Alternatively, one may set up a SphericalBesselTransformer in cache-enabled
-     * mode and have it shared among multiple NumericalRadial objects by calling this
-     * function, which could be beneficial when there are a lot of NumericalRadial objects
-     * of the same grid.
+    /**
+     * @brief Performs a FFT-based spherical Bessel transform from the space with
+     * strict cutoff to the other.
      *
      */
-    void set_transformer(
-        const ModuleBase::SphericalBesselTransformer& sbt
-    );
+    void radrfft();
+
+
+    /** 
+     * @brief Sets a SphericalBesselTransformer.
+     *
+     * Spherical Bessel transforms (radrfft) of this class are performed via
+     * SphericalBesselTransformer objects (sbt_), which are opaque shared pointers.
+     * By default each NumericalRadial object constructs its own sbt_ in cache-
+     * disabled mode, so calls to radrfft on different objects are independent.
+     *
+     * This function enables an object to switch to a designated sbt. Once multiple
+     * NumericalRadial objects of the same grid are supplied with a common cache-
+     * enable sbt, their radrfft will benefit from the cache mechanism.
+     *
+     */
+    void set_transformer(const ModuleBase::SphericalBesselTransformer& sbt);
 
 
     /**
@@ -124,18 +104,7 @@ public:
      * @note it is not allowed to set a cutoff smaller than the actual cutoff_.
      *
      */
-    void set_grid(
-        const int ngrid,
-        const double grid_max
-    );
-
-
-    /**
-     * @brief Performs a FFT-based spherical Bessel transform from the space with strict
-     * cutoff to the other space.
-     *
-     */
-    void radrfft();
+    void set_grid(const int ngrid,const double grid_max);
 
 
     int l() const { return l_; }
@@ -144,8 +113,8 @@ public:
     void rvalue(const int n, const double* const grid, double* const value);
     void kvalue(const int n, const double* const grid, double* const value);
 
-    double pr() const { return cutoff_.first == Space::r ? p_ : 0; }
-    double pk() const { return cutoff_.first == Space::k ? p_ : 0; }
+    int pr() const { return cutoff_.first == Space::r ? p_ : 0; }
+    int pk() const { return cutoff_.first == Space::k ? p_ : 0; }
 
     // cutoff space & radius
     std::pair<Space, double> cutoff() const { return cutoff_; }
@@ -185,16 +154,19 @@ private:
      * @name Extra exponent in input values.
      *
      * Sometimes a radial function is given in the form of pow(r,p) * f(r) rather
-     * than f(r). For example, the Kleinman-Bylander beta functions in a UPF file
-     * are often given as r*beta(r) instead of bare beta(r). Very often r*beta(r)
-     * is adequate for all practical purposes; there's no need to recover the bare
-     * beta(r).
+     * than f(r). For example, Kleinman-Bylander beta functions in UPF files are
+     * often provided as r*beta(r) instead of bare beta(r). Very often one merely
+     * needs to perform multiplications upon r*beta(r); there's no need to recover
+     * the bare beta(r).
      *
-     * This class takes care of this situation. When building the object, one can
-     * simply feed pow(r,p) * f(r) to value and specify the exponent p so that the
-     * class would know that the values have an extra exponent. This variable keeps
-     * track of this exponent, which will be automatically taken account during
-     * spherical Bessel transforms.
+     * This class takes care of this kind of situations. For example, when constructing
+     * a beta function's numerial radial object, one can simply feed r*beta(r) to value
+     * and specify p = 1 so that the class would take this extra exponent into account
+     * when performing spherical Bessel transforms.
+     *
+     * @note Internally, values stored in CubicSpline objects still carry this exponent,
+     * hence the outputs of rvalue() or kvalue(). One should be aware of this when using
+     * these values from outside and remember to get the extra exponents via pr() or pk().
      *
      */
     int p_ = 0;
@@ -210,7 +182,6 @@ private:
         const double* const grid,
         double* const value
     ) const;
-
 };
 
 #endif

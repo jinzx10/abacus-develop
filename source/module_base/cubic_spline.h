@@ -336,6 +336,8 @@ public:
     /// last knot
     double xmax() const { return xmax_; }
 
+    /// scale all interpolants by a factor
+    void scale(const double k);
 
 private:
 

@@ -137,12 +137,10 @@ void NumericalRadial::_eval(
     std::fill(value, value + n, 0.0);
     for (int i = 0; i < n; ++i)
     {
-        // grid points outside the cutoff radius are set to zero
         if (grid[i] <= f->xmax())
         {
             f->eval(1, &grid[i], &value[i]);
         }
+        // values for grid points outside the cutoff radius are zero
     }
 }
-
-

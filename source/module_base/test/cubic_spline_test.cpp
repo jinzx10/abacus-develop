@@ -446,6 +446,19 @@ TEST_F(CubicSplineTest, CrossCheck)
             EXPECT_TRUE(std::all_of(diff[d], diff[d] + n_interp,
                 [this, d](double diff) { return std::abs(diff) < tol_[d]; }));
         }
+
+        // check scale()
+        const double k = 3.14; // scaling factor
+        cubspl.scale(k);
+        cubspl.eval(n_interp, x_interp_, y_interp_, dy_interp_, d2y_interp_);
+
+        for (int d = 0; d < 3; ++d)
+        {
+            std::for_each(ref[d], ref[d] + n_interp, [k](double& val) { val *= k; });
+            std::transform(diff[d], diff[d] + n_interp, ref[d], diff[d], std::minus<double>());
+            EXPECT_TRUE(std::all_of(diff[d], diff[d] + n_interp,
+                [this, d, k](double diff) { return std::abs(diff) < tol_[d] * k; }));
+        }
     }
 }
 
