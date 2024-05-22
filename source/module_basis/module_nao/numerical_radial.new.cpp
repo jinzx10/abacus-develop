@@ -21,7 +21,8 @@ NumericalRadial::NumericalRadial(
 ):
     l_{l},
     ngrid_{ngrid},
-    cutoff_{space, cutoff},
+    cutoff_space_{space},
+    cutoff_radius_{cutoff},
     f_{new CubicSpline(ngrid, 0, cutoff / (ngrid - 1), value)},
     p_{p},
     sbt_{sbt}
@@ -37,7 +38,7 @@ NumericalRadial::NumericalRadial(
             integrand[i] *= integrand[i] * std::pow(i * dx, 2 - p);
         }
 
-        double fac = Integral::simpson(ngrid_, integrand.data(), dx);
+        const double fac = Integral::simpson(ngrid_, integrand.data(), dx);
         f_->scale(1.0 / std::sqrt(fac));
     }
 }
@@ -46,10 +47,11 @@ NumericalRadial::NumericalRadial(
 NumericalRadial::NumericalRadial(const NumericalRadial& rhs):
     l_{rhs.l_},
     ngrid_{rhs.ngrid_},
-    cutoff_{rhs.cutoff_},
+    cutoff_space_{rhs.cutoff_space_},
+    cutoff_radius_{rhs.cutoff_radius_},
+    p_{rhs.p_},
     sbt_{rhs.sbt_}
 {
-    p_ = rhs.p_;
     f_.reset(rhs.f_ ? new CubicSpline(*rhs.f_) : nullptr);
     g_.reset(rhs.g_ ? new CubicSpline(*rhs.g_) : nullptr);
 }
@@ -82,9 +84,9 @@ void NumericalRadial::set_transformer(const ModuleBase::SphericalBesselTransform
 
 void NumericalRadial::set_grid(const int ngrid, const double grid_max)
 {
-    assert(ngrid > 1 && grid_max >= cutoff_.second);
+    assert(ngrid > 1 && grid_max >= cutoff_radius_);
 
-    double dx = grid_max / (ngrid - 1);
+    const double dx = grid_max / (ngrid - 1);
 
     std::vector<double> grid_new(ngrid);
     std::fill(grid_new.begin(), grid_new.end(),
@@ -93,7 +95,7 @@ void NumericalRadial::set_grid(const int ngrid, const double grid_max)
     // NOTE: CubicSpline cannot extrapolate; we need to find the number of
     // new grid points within the cutoff radius before interpolation.
     std::vector<double> value_new(ngrid);
-    int ngrid_interp = static_cast<int>(cutoff_.second / dx) + 1;
+    const int ngrid_interp = static_cast<int>(cutoff_radius_ / dx) + 1;
     f_->eval(ngrid_interp, grid_new.data(), value_new.data());
     f_.reset(new CubicSpline(ngrid, 0, dx, value_new.data()));
 
@@ -111,11 +113,11 @@ void NumericalRadial::radrfft()
     double* in = grid_in + ngrid_;
     double* out = in + ngrid_;
 
-    const double dx = cutoff_.second / (ngrid_ - 1);
+    const double dx = cutoff_radius_ / (ngrid_ - 1);
     std::for_each(grid_in, grid_in + ngrid_,
         [dx, &grid_in](double& x) { x = (&x - grid_in) * dx; });
 
-    _eval(cutoff_.first, ngrid_, grid_in, in);
+    _eval(cutoff_space_, ngrid_, grid_in, in);
 
     sbt_.radrfft(l_, ngrid_, f_->xmax(), in, out, p_);
     g_.reset(new CubicSpline(ngrid_, 0, std::acos(-1.0)/dx, out));
@@ -129,7 +131,7 @@ void NumericalRadial::_eval(
     double* const value
 ) const
 {
-    const auto& f = (space == cutoff_.first) ? f_ : g_;
+    const auto& f = (space == cutoff_space_) ? f_ : g_;
 
     assert(n > 0 && grid && value && f);
     assert(std::all_of(grid, grid + n, [](double x) { return x >= 0.0; }));

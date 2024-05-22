@@ -2,7 +2,6 @@
 #define NUMERICAL_RADIAL_H_
 
 #include <memory>
-#include <utility>
 
 #include "module_base/cubic_spline.h"
 #include "module_base/spherical_bessel_transformer.h"
@@ -11,10 +10,11 @@
  * @brief Numerical radial function.
  *
  * This container is supposed to hold the radial part of a pseudo-atomic orbital
- * ([radial] x [spherical harmonic]) which has some cutoff radius in some space,
- * like numerical atomic orbitals, Kleinman-Bylander beta functions, etc. Such
- * a radial function is associated with some angular momentum l, and its values
- * in r & k space are related by an l-th order spherical Bessel transform.
+ * (i.e., has the form of [radial] x [spherical harmonic]) which has a cutoff
+ * radius in some space. This includes numerical atomic orbitals, Kleinman-Bylander
+ * beta functions, and many others. Such a radial function is characterized by an
+ * angular momentum l, and its values in r & k space are related by an l-th order
+ * spherical Bessel transform.
  *
  */
 class NumericalRadial
@@ -113,11 +113,11 @@ public:
     void rvalue(const int n, const double* const grid, double* const value);
     void kvalue(const int n, const double* const grid, double* const value);
 
-    int pr() const { return cutoff_.first == Space::r ? p_ : 0; }
-    int pk() const { return cutoff_.first == Space::k ? p_ : 0; }
+    int pr() const { return cutoff_space_ == Space::r ? p_ : 0; }
+    int pk() const { return cutoff_space_ == Space::k ? p_ : 0; }
 
-    // cutoff space & radius
-    std::pair<Space, double> cutoff() const { return cutoff_; }
+    Space cutoff_space() const { return cutoff_space_; }
+    double cutoff_radius() const { return cutoff_radius_; }
 
 
 private:
@@ -129,20 +129,29 @@ private:
     int ngrid_;
 
     /**
-     * @brief Cutoff space and radius.
+     * @brief Space with a strict cutoff.
      *
-     * A radial function with a strict cutoff in r space cannot have a strict
-     * cutoff in k space (and vice versa), hence only one cutoff is recorded,
-     * which includes the space and the radius.
-     * 
-     * Note that the grid in the space with a strict cutoff might be reset via
-     * set_grid with a larger "cutoff" than the one provided in the constructor
-     * for the sake of FFT-based spherical Bessel transform and two-center table.
-     * The following variable keeps track of the original cutoff radius, i.e.,
-     * the one given in the constructor.
+     * In theory, a radial function with a strict cutoff in r space cannot have
+     * a strict cutoff in k space, and vice versa. However, in practice, grids
+     * in both spaces must be finite.
+     *
+     * This class assumes that the space specified in the constructor is the one
+     * with a strict cutoff, which is recorded below.
      *
      */
-    std::pair<Space, double> cutoff_;
+    Space cutoff_space_;
+
+    /**
+     * @brief cutoff radius
+     *
+     * Grid in the space with a strict cutoff might be reset via set_grid with a
+     * larger "cutoff" than the one provided in the constructor for the sake of
+     * FFT-based spherical Bessel transform and two-center table. The following
+     * variable keeps track of the original cutoff radius, i.e., the one given
+     * in the constructor.
+     *
+     */
+    double cutoff_radius_;
 
     /// radial function in the space with strict cutoff
     std::unique_ptr<ModuleBase::CubicSpline> f_;
