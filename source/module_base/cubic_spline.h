@@ -330,14 +330,19 @@ public:
     /// heap memory usage in bytes
     size_t heap_usage() const { return (x_.capacity() + y_.capacity()) * sizeof(double); }
 
-    /// first knot
-    double xmin() const { return xmin_; }
-
-    /// last knot
-    double xmax() const { return xmax_; }
 
     /// scale all interpolants by a factor
     void scale(const double k);
+
+
+    int n() const { return n_; }
+    int n_spline() const { return n_spline_; }
+    double xmin() const { return xmin_; }
+    double xmax() const { return xmax_; }
+    double dx() const { return dx_; }
+    const double* xdata() const { return x_.data(); }
+    const double* ydata() const { return y_.data(); }
+    bool is_uniform() const { return x_.empty(); }
 
 private:
 

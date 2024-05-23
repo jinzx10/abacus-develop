@@ -10,10 +10,10 @@
  * @brief Numerical radial function.
  *
  * This container is supposed to hold the radial part of a pseudo-atomic orbital
- * (i.e., has the form of [radial] x [spherical harmonic]) which has a cutoff
- * radius in some space. This includes numerical atomic orbitals, Kleinman-Bylander
- * beta functions, and many others. Such a radial function is characterized by an
- * angular momentum l, and its values in r & k space are related by an l-th order
+ * (i.e., an orbital of the form [radial] x [spherical harmonic]) with a strict
+ * cutoff radius, which involves numerical atomic orbitals, Kleinman-Bylander beta
+ * functions, pseudo-wavefunctions, etc. Such a radial function is characterized
+ * by an angular momentum l, and values in r & k space are related by an l-th order
  * spherical Bessel transform.
  *
  */
@@ -33,7 +33,7 @@ public:
     NumericalRadial& operator=(NumericalRadial); // copy-swap idiom
 
     /**
-     * @brief Initializes the object in the space with strict cutoff.
+     * @brief Initialization in the space with strict cutoff.
      *
      * This constructor initializes the object with the given angular momentum,
      * number of grid points, cutoff radius, and values on the grid. The grid is
@@ -43,16 +43,16 @@ public:
      *      grid[i] = i * -------
      *                    ngrid-1
      *
-     * and the value may carry an extra exponent p than what the object is supposed
+     * and values may carry an extra exponent p than what the object is supposed
      * to represent (see @ref p_ for details).
      *
      * @param[in]   l           angular momentum
      * @param[in]   ngrid       number of grid points
      * @param[in]   cutoff      cutoff radius
-     * @param[in]   value       values on the grid
+     * @param[in]   values      values on the grid
      * @param[in]   space       the space (r or k) of inputs
      * @param[in]   normalize   whether to normalize the radial function
-     * @param[in]   p           extra exponent in input values
+     * @param[in]   p           extra exponent in values
      * @param[in]   sbt         a user-provided spherical Bessel transformer
      *
      */
@@ -68,47 +68,43 @@ public:
     );
 
 
-    /**
-     * @brief Performs a FFT-based spherical Bessel transform from the space with
-     * strict cutoff to the other.
-     *
-     */
+    /// Perform an FFT-based spherical Bessel transform from the space with strict
+    /// cutoff to the other.
     void radrfft();
 
 
     /** 
      * @brief Sets a SphericalBesselTransformer.
      *
-     * Spherical Bessel transforms (radrfft) of this class are performed via
-     * SphericalBesselTransformer objects (sbt_), which are opaque shared pointers.
-     * By default each NumericalRadial object constructs its own sbt_ in cache-
-     * disabled mode, so calls to radrfft on different objects are independent.
+     * Computation of spherical Bessel transforms (SBT) involves some tabulation,
+     * which may or may not be cached. SBT of this class (radrfft) are performed via
+     * member sbt_, which is an opaque shared pointer. By default, each NumericalRadial
+     * object has its own sbt_ in cache-disabled mode. Calls to radrfft by different
+     * objects are independent from each other.
      *
-     * This function enables an object to switch to a designated sbt. Once multiple
-     * NumericalRadial objects of the same grid are supplied with a common cache-
-     * enable sbt, their radrfft will benefit from the cache mechanism.
+     * This function sets the member sbt_ to a designated one, possibly cache-enabled.
+     * Once multiple NumericalRadial objects of the same grid are supplied with a common
+     * cache-enable sbt, their radrfft will benefit from the cache mechanism.
      *
      */
     void set_transformer(const ModuleBase::SphericalBesselTransformer& sbt);
 
 
     /**
-     * @brief Resets the grid (and update values) in the space with strict cutoff.
+     * @brief Updates grid in the space with strict cutoff.
      *
-     * This function resets the grid in the space with strict cutoff (i.e., the space
-     * specified in constructor) and updates values by an interpolation.
+     * This function resets the grid in the space with strict cutoff (cutoff_space_)
+     * and updates values by cubic spline interpolation. If values in the other space
+     * also exist, they will be updated accordingly.
      *
-     * If values in the other space also exist, they will be updated by a spherical
-     * Bessel transform (radrfft).
-     *
-     * @note it is not allowed to set a cutoff smaller than the actual cutoff_.
+     * @note it is not allowed to set a grid_max smaller than cutoff_radius_.
      *
      */
     void set_grid(const int ngrid,const double grid_max);
 
 
     int l() const { return l_; }
-    int ngrid() const { return ngrid_; }
+    int ngrid() const { return f_->n(); }
 
     void rvalue(const int n, const double* const grid, double* const value);
     void kvalue(const int n, const double* const grid, double* const value);
@@ -125,11 +121,8 @@ private:
     /// angular momentum
     int l_;
 
-    /// number of grid points
-    int ngrid_;
-
     /**
-     * @brief Space with a strict cutoff.
+     * @brief space with a strict cutoff
      *
      * In theory, a radial function with a strict cutoff in r space cannot have
      * a strict cutoff in k space, and vice versa. However, in practice, grids
@@ -144,8 +137,8 @@ private:
     /**
      * @brief cutoff radius
      *
-     * Grid in the space with a strict cutoff might be reset via set_grid with a
-     * larger "cutoff" than the one provided in the constructor for the sake of
+     * Grid in the space with a strict cutoff might be updated via set_grid with
+     * a larger "cutoff" than the one provided in the constructor for the sake of
      * FFT-based spherical Bessel transform and two-center table. The following
      * variable keeps track of the original cutoff radius, i.e., the one given
      * in the constructor.
