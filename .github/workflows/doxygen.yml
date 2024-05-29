@@ -3,7 +3,10 @@ name: Doxygen Documentation Deployment
 
 on:
   push:
-    branches: ["doxygen"]
+    # trigger the workflow whenever the "develop" branch has a push event
+    branches: ["doxygen", "develop"]
+    # FIXME The above "doxygen" branch is for PR review.
+    # It shall be removed once this workflow PR is merged.
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -38,6 +41,7 @@ jobs:
       - name: Generate Doxygen Documentation
         working-directory: ./doxygen
         run: |
+          # download a better-looking style sheet
           wget https://raw.githubusercontent.com/jothepro/doxygen-awesome-css/main/doxygen-awesome.css
           doxygen
         shell: bash
