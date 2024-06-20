@@ -153,15 +153,14 @@ HamiltLCAO<TK, TR>::HamiltLCAO(Gint_Gamma* GG_in,
         // in general case, target HR is this->hR, while target HK is LCAO_Matrix::Hloc
         if (GlobalV::VNL_IN_H)
         {
-            Operator<TK>* nonlocal
-                = new NonlocalNew<OperatorLCAO<TK, TR>>(LM_in,
-                                                        this->kv->kvec_d,
-                                                        this->hR,
-                                                        &(this->getHk(LM_in)),
-                                                        &GlobalC::ucell,
-                                                        &GlobalC::GridD,
-                                                        two_center_bundle.overlap_orb_beta.get(),
-                                                        LM_in->ParaV);
+            Operator<TK>* nonlocal = new NonlocalNew<OperatorLCAO<TK, TR>>(LM_in,
+                                                                           this->kv->kvec_d,
+                                                                           this->hR,
+                                                                           &(this->getHk(LM_in)),
+                                                                           &GlobalC::ucell,
+                                                                           &GlobalC::GridD,
+                                                                           two_center_bundle.overlap_orb_beta.get(),
+                                                                           LM_in->ParaV);
             this->getOperator()->add(nonlocal);
         }
 
@@ -306,15 +305,14 @@ HamiltLCAO<TK, TR>::HamiltLCAO(Gint_Gamma* GG_in,
         // in general case, target HR is this->hR, while target HK is LCAO_Matrix::Hloc2
         if (GlobalV::VNL_IN_H)
         {
-            Operator<TK>* nonlocal
-                = new NonlocalNew<OperatorLCAO<TK, TR>>(LM_in,
-                                                        this->kv->kvec_d,
-                                                        this->hR,
-                                                        &(this->getHk(LM_in)),
-                                                        &GlobalC::ucell,
-                                                        &GlobalC::GridD,
-                                                        two_center_bundle.overlap_orb_beta.get(),
-                                                        LM_in->ParaV);
+            Operator<TK>* nonlocal = new NonlocalNew<OperatorLCAO<TK, TR>>(LM_in,
+                                                                           this->kv->kvec_d,
+                                                                           this->hR,
+                                                                           &(this->getHk(LM_in)),
+                                                                           &GlobalC::ucell,
+                                                                           &GlobalC::GridD,
+                                                                           two_center_bundle.overlap_orb_beta.get(),
+                                                                           LM_in->ParaV);
             // TDDFT velocity gague will calculate full non-local potential including the original one and the
             // correction on its own. So the original non-local potential term should be skipped
             if (GlobalV::ESOLVER_TYPE != "tddft" || elecstate::H_TDDFT_pw::stype != 1)

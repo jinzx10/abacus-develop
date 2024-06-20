@@ -339,7 +339,16 @@ void Force_LCAO<std::complex<double>>::ftable(const bool isforce,
     // doing on the real space grid.
     this->cal_fvl_dphi(isforce, isstress, pelec->pot, gint, fvl_dphi, svl_dphi);
 
-    this->cal_fvnl_dbeta(dm, pv, ucell, GlobalC::ORB, *(two_center_bundle.overlap_orb_beta), GlobalC::GridD, isforce, isstress, fvnl_dbeta, svnl_dbeta);
+    this->cal_fvnl_dbeta(dm,
+                         pv,
+                         ucell,
+                         GlobalC::ORB,
+                         *(two_center_bundle.overlap_orb_beta),
+                         GlobalC::GridD,
+                         isforce,
+                         isstress,
+                         fvnl_dbeta,
+                         svnl_dbeta);
 
 #ifdef __DEEPKS
     if (GlobalV::deepks_scf)
