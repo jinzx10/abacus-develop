@@ -14,8 +14,8 @@ test_deepks::~test_deepks()
 
 void test_deepks::check_dstable(void)
 {
-	OGT.talpha.print_Table_DSR(ORB);
-	this->compare_with_ref("S_I_mu_alpha.dat","S_I_mu_alpha_ref.dat");
+	//OGT.talpha.print_Table_DSR(ORB);
+	//this->compare_with_ref("S_I_mu_alpha.dat","S_I_mu_alpha_ref.dat");
 }
 
 void test_deepks::check_psialpha(void)
@@ -36,13 +36,13 @@ void test_deepks::check_psialpha(void)
 		ucell,
 		ORB,
         Test_Deepks::GridD,
-		OGT);
+		overlap_orb_alpha_);
 
 	ld.check_psialpha(GlobalV::CAL_FORCE,
 		ucell,
 		ORB,
-        Test_Deepks::GridD,
-		OGT);
+        Test_Deepks::GridD);
+
 	this->compare_with_ref("psialpha.dat","psialpha_ref.dat");
 	this->compare_with_ref("dpsialpha_x.dat","dpsialpha_x_ref.dat");
 	this->compare_with_ref("dpsialpha_y.dat","dpsialpha_y_ref.dat");

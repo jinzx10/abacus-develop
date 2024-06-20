@@ -1,4 +1,5 @@
 #include "LCAO_deepks_test.h"
+#include "module_base/global_variable.h"
 
 void test_deepks::preparation()
 {
@@ -167,21 +168,19 @@ void test_deepks::set_orbs(const double &lat0_in)
 			ucell.atoms,
 			GlobalV::ofs_running,
 			ORB);
-#ifdef USE_NEW_TWO_CENTER
-        OGT.two_center_bundle.reset(new TwoCenterBundle);
-        OGT.two_center_bundle->build(ucell.ntype, ucell.orbital_fn, ucell.infoNL.Beta,
-            GlobalV::deepks_setorb, &ucell.descriptor_file);
-#else
-		ooo.set_orb_tables(
-			GlobalV::ofs_running,
-			OGT,
-			ORB,
-			ucell.lat0,
-			GlobalV::deepks_setorb,
-			lmax,
-			ucell.infoNL.nprojmax,
-			ucell.infoNL.nproj,
-			ucell.infoNL.Beta);
+
+        std::vector<std::string> file_orb(ntype);
+        std::transform(ucell.orbital_fn, ucell.orbital_fn + ntype, file_orb.begin(),
+                [](const std::string& file) { return GlobalV::global_orbital_dir + file; });
+        orb_.build(ntype, file_orb.data());
+
+        std::string file_alpha = GlobalV::global_orbital_dir + ucell.descriptor_file;
+        alpha_.build(1, &file_alpha);
+
+        double cutoff = orb_.rcut_max() + alpha_.rcut_max();
+        int nr = static_cast<int>(cutoff / lcao_dr) + 1;
+        overlap_orb_alpha_.tabulate(orb_, alpha_, 'S', nr, cutoff);
+
         GlobalV::ofs_running << "read and set from orbital_file : " << ORB.orbital_file[it] << std::endl;
         GlobalV::ofs_running << "ucell.ntype, ucell.lmax : " << ucell.ntype << " " << ucell.lmax << std::endl;
 #endif

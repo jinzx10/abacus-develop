@@ -5,7 +5,7 @@
 
 #include "module_base/intarray.h"
 #include "module_base/complexmatrix.h"
-#include "module_basis/module_ao/ORB_gen_tables.h"
+#include "module_basis/module_nao/two_center_integrator.h"
 #include <unordered_map>
 
 #include "torch/script.h"
@@ -247,13 +247,12 @@ public:
         const UnitCell &ucell,
         const LCAO_Orbitals &orb,
         Grid_Driver& GridD,
-        const ORB_gen_tables &UOT);
+        const TwoCenterIntegrator& overlap_orb_alpha);
 
     void check_psialpha(const bool& cal_deri/**< [in] 0 for 2-center intergration, 1 for its derivation*/,
         const UnitCell &ucell,
         const LCAO_Orbitals &orb,
-        Grid_Driver& GridD,
-        const ORB_gen_tables &UOT);
+        Grid_Driver& GridD);
 
 //-------------------
 // LCAO_deepks_pdm.cpp

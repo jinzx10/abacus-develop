@@ -17,7 +17,7 @@ void Force_LCAO<double>::allocate(
     const Parallel_Orbitals& pv,
     LCAO_Matrix& lm,
     ForceStressArrays& fsr, // mohan add 2024-06-15
-    const ORB_gen_tables* uot,
+    const TwoCenterBundle& two_center_bundle,
     const int& nks,
     const std::vector<ModuleBase::Vector3<double>>& kvec_d)
 {
@@ -77,7 +77,7 @@ void Force_LCAO<double>::allocate(
 			GlobalC::ucell, 
 			GlobalC::ORB, 
 			pv,
-			*(uot->two_center_bundle), 
+			two_center_bundle, 
 			&GlobalC::GridD, 
 			lm.Sloc.data());
 
@@ -102,7 +102,7 @@ void Force_LCAO<double>::allocate(
 			GlobalC::ucell, 
 			GlobalC::ORB, 
 			pv,
-			*(uot->two_center_bundle), 
+			two_center_bundle, 
 			&GlobalC::GridD, 
 			lm.Hloc_fixed.data());
 
@@ -113,7 +113,7 @@ void Force_LCAO<double>::allocate(
 			cal_deri, 
 			GlobalC::ucell, 
 			GlobalC::ORB, 
-			*(uot->two_center_bundle->overlap_orb_beta), 
+			*(two_center_bundle.overlap_orb_beta), 
 			&GlobalC::GridD);
 
     // calculate asynchronous S matrix to output for Hefei-NAMD
@@ -131,7 +131,7 @@ void Force_LCAO<double>::allocate(
 				GlobalC::ucell, 
 				GlobalC::ORB, 
 				pv,
-				*(uot->two_center_bundle), 
+				two_center_bundle, 
 				&GlobalC::GridD, 
 				lm.Sloc.data(), 
 				INPUT.cal_syns, 
@@ -240,7 +240,7 @@ void Force_LCAO<double>::ftable(
     ModuleBase::matrix& svnl_dalpha,
 #endif
     TGint<double>::type& gint,
-    const ORB_gen_tables* uot,
+    const TwoCenterBundle& two_center_bundle,
     const Parallel_Orbitals& pv,
     LCAO_Matrix& lm,
     const K_Vectors* kv,
@@ -262,7 +262,7 @@ void Force_LCAO<double>::ftable(
 			pv, 
 			lm,
             fsr,
-			uot);
+			two_center_bundle);
 
     // calculate the force related to 'energy density matrix'.
 	this->cal_fedm(
@@ -293,7 +293,7 @@ void Force_LCAO<double>::ftable(
 			pv, 
 			ucell, 
 			GlobalC::ORB, 
-			*(uot->two_center_bundle->overlap_orb_beta), 
+			*(two_center_bundle.overlap_orb_beta), 
 			GlobalC::GridD, 
 			isforce, 
 			isstress, 

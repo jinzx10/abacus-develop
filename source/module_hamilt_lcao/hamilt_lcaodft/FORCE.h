@@ -63,7 +63,7 @@ private:
         ModuleBase::matrix& svnl_dalpha,
 #endif
         typename TGint<T>::type& gint,
-        const ORB_gen_tables* uot,
+        const TwoCenterBundle& two_center_bundle,
         const Parallel_Orbitals& pv,
         LCAO_Matrix& lm,
         const K_Vectors* kv = nullptr,
@@ -75,7 +75,7 @@ private:
         const Parallel_Orbitals& pv,
         LCAO_Matrix& lm,
         ForceStressArrays& fsr, // mohan add 2024-06-15
-        const ORB_gen_tables* uot,
+        const TwoCenterBundle& two_center_bundle,
         const int& nks = 0,
         const std::vector<ModuleBase::Vector3<double>>& kvec_d = {});
 

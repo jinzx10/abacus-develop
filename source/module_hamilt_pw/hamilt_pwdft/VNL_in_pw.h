@@ -11,7 +11,7 @@
 #include "module_hamilt_pw/hamilt_pwdft/structure_factor.h"
 #include "module_psi/psi.h"
 #ifdef __LCAO
-#include "module_basis/module_ao/ORB_gen_tables.h"
+#include "module_basis/module_ao/ORB_gaunt_table.h"
 #endif
 
 //==========================================================

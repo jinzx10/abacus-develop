@@ -370,7 +370,7 @@ void ESolver_KS_LCAO<TK, TR>::cal_force(ModuleBase::matrix& force)
                        this->LM,
                        this->GG, // mohan add 2024-04-01
                        this->GK, // mohan add 2024-04-01
-                       uot_,
+                       *(uot_->two_center_bundle),
                        force,
                        this->scs,
                        this->sf,

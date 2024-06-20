@@ -39,7 +39,7 @@ class Force_Stress_LCAO
 		LCAO_Matrix &lm,
 		Gint_Gamma &gint_gamma, // mohan add 2024-04-01
 		Gint_k &gint_k, // mohan add 2024-04-01
-        const ORB_gen_tables* uot,
+        const TwoCenterBundle& two_center_bundle,
         ModuleBase::matrix& fcs,
         ModuleBase::matrix& scs,
         const Structure_Factor& sf,
@@ -91,7 +91,7 @@ class Force_Stress_LCAO
 #endif
 		Gint_Gamma &gint_gamma,
 		Gint_k &gint_k,
-        const ORB_gen_tables* uot,
+        const TwoCenterBundle& two_center_bundle,
 	    const Parallel_Orbitals &pv,
 		LCAO_Matrix &lm,
 		const K_Vectors& kv);

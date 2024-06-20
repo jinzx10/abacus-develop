@@ -31,8 +31,11 @@ public:
     ~test_deepks();
 
 	LCAO_Orbitals ORB;
-	ORB_gen_tables OGT;
 	ORB_control ooo;
+
+    RadialCollection orb_;
+    RadialCollection alpha_;
+    TwoCenterIntegrator overlap_orb_alpha_;
 
 	UnitCell ucell;
 
