@@ -124,7 +124,7 @@ private:
         const Parallel_Orbitals& pv,
         const UnitCell& ucell,
         const LCAO_Orbitals& orb,
-        const ORB_gen_tables& uot,
+        const TwoCenterIntegrator& intor_orb_beta,
         Grid_Driver& gd,
         const bool isforce,
         const bool isstress,

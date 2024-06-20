@@ -18,7 +18,6 @@
 #include "module_base/inverse_matrix.h"
 #include "module_base/parallel_reduce.h"
 #include "module_base/timer.h"
-#include "module_basis/module_ao/ORB_gen_tables.h"
 #include "module_elecstate/magnetism.h"
 #include "module_elecstate/module_charge/charge.h"
 #include "module_elecstate/elecstate_lcao.h"

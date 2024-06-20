@@ -7,6 +7,7 @@
 #include "module_hamilt_lcao/hamilt_lcaodft/LCAO_matrix.h"
 #include "module_hamilt_lcao/module_gint/gint_k.h"
 #include "module_hamilt_pw/hamilt_pwdft/global.h"
+#include "module_basis/module_nao/two_center_bundle.h"
 
 namespace ModuleIO
 {
@@ -30,7 +31,7 @@ namespace ModuleIO
 			Gint_k& gint_k,  // mohan add 2024-04-01
 			LCAO_Matrix &lm,  // mohan add 2024-04-01
             Grid_Driver &grid, // mohan add 2024-04-06
-            const ORB_gen_tables* uot,
+            const TwoCenterBundle& two_center_bundle,
             const K_Vectors& kv,
             const bool& binary = false,
             const double& sparse_threshold = 1e-10);
@@ -41,7 +42,7 @@ namespace ModuleIO
             const Parallel_Orbitals &pv,
 			LCAO_Matrix &lm,
             Grid_Driver &grid,
-            const ORB_gen_tables* uot,
+            const TwoCenterBundle& two_center_bundle,
             const std::string& TR_filename = "data-TR-sparse_SPIN0.csr",
             const bool& binary = false,
             const double& sparse_threshold = 1e-10);

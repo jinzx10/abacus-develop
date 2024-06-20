@@ -18,7 +18,7 @@ void ModuleIO::Init_DS_tmp(
 		const Parallel_Orbitals& pv,
 		LCAO_Matrix &lm,
         ForceStressArrays &fsr,
-        const ORB_gen_tables* uot)
+        const TwoCenterBundle& two_center_bundle)
 {    
     ModuleBase::TITLE("ModuleIO", "Init_DS_tmp");
     ModuleBase::timer::tick("ModuleIO", "Init_DS_tmp");
@@ -45,7 +45,7 @@ void ModuleIO::Init_DS_tmp(
         GlobalC::ucell, 
         GlobalC::ORB, 
         pv,
-        *uot, 
+        two_center_bundle, 
         &GlobalC::GridD, 
         nullptr); // delete lm.SlocR
 
@@ -154,7 +154,7 @@ void ModuleIO::write_current(const int istep,
                                 const psi::Psi<std::complex<double>>* psi,
                                 const elecstate::ElecState* pelec,
                                 const K_Vectors& kv,
-                                const ORB_gen_tables* uot,
+                                const TwoCenterBundle& two_center_bundle,
                                 const Parallel_Orbitals* pv,
 								Record_adj& ra,
 								LCAO_Matrix &lm) // mohan add 2024-04-02
@@ -167,7 +167,7 @@ void ModuleIO::write_current(const int istep,
     ForceStressArrays fsr_c;
 
     //Init_DS_tmp
-    Init_DS_tmp(*pv, lm, fsr_c, uot);
+    Init_DS_tmp(*pv, lm, fsr_c, two_center_bundle);
 
     // construct a DensityMatrix object
     elecstate::DensityMatrix<std::complex<double>, double> DM(&kv,pv,GlobalV::NSPIN);

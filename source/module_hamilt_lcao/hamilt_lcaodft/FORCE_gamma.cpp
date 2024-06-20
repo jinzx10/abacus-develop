@@ -77,7 +77,7 @@ void Force_LCAO<double>::allocate(
 			GlobalC::ucell, 
 			GlobalC::ORB, 
 			pv,
-			*uot, 
+			*(uot->two_center_bundle), 
 			&GlobalC::GridD, 
 			lm.Sloc.data());
 
@@ -102,7 +102,7 @@ void Force_LCAO<double>::allocate(
 			GlobalC::ucell, 
 			GlobalC::ORB, 
 			pv,
-			*uot, 
+			*(uot->two_center_bundle), 
 			&GlobalC::GridD, 
 			lm.Hloc_fixed.data());
 
@@ -113,7 +113,7 @@ void Force_LCAO<double>::allocate(
 			cal_deri, 
 			GlobalC::ucell, 
 			GlobalC::ORB, 
-			*uot, 
+			*(uot->two_center_bundle->overlap_orb_beta), 
 			&GlobalC::GridD);
 
     // calculate asynchronous S matrix to output for Hefei-NAMD
@@ -131,7 +131,7 @@ void Force_LCAO<double>::allocate(
 				GlobalC::ucell, 
 				GlobalC::ORB, 
 				pv,
-				*uot, 
+				*(uot->two_center_bundle), 
 				&GlobalC::GridD, 
 				lm.Sloc.data(), 
 				INPUT.cal_syns, 
@@ -293,7 +293,7 @@ void Force_LCAO<double>::ftable(
 			pv, 
 			ucell, 
 			GlobalC::ORB, 
-			*uot, 
+			*(uot->two_center_bundle->overlap_orb_beta), 
 			GlobalC::GridD, 
 			isforce, 
 			isstress, 

@@ -14,7 +14,7 @@ void write_current(const int istep,
                     const psi::Psi<std::complex<double>>* psi,
                     const elecstate::ElecState* pelec,
                     const K_Vectors& kv,
-                    const ORB_gen_tables* uot,
+                    const TwoCenterBundle& two_center_bundle,
                     const Parallel_Orbitals* pv,
 					Record_adj& ra,
 					LCAO_Matrix &lm); // mohan add 2024-04-02
@@ -27,7 +27,7 @@ void Init_DS_tmp(
 		const Parallel_Orbitals& pv,
 		LCAO_Matrix &lm,
         ForceStressArrays &fsr,
-        const ORB_gen_tables* uot);
+        const TwoCenterBundle& two_center_bundle);
 
 /// @brief DS_locR will be initialized again in force calculation, so it must be destoryed here.
 void destory_DS_tmp(ForceStressArrays &fsr);

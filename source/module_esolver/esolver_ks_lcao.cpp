@@ -1369,7 +1369,7 @@ ModuleIO::Output_Mat_Sparse<TK> ESolver_KS_LCAO<TK, TR>::create_Output_Mat_Spars
                                            this->pelec->pot->get_effective_v(),
                                            this->orb_con.ParaV,
                                            this->GK, // mohan add 2024-04-01
-                                           uot_,
+                                           *(uot_->two_center_bundle),
                                            this->LM,
                                            GlobalC::GridD, // mohan add 2024-04-06
                                            this->kv,

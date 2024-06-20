@@ -7,10 +7,9 @@
 
 #include "module_base/global_function.h"
 #include "module_base/global_variable.h"
-#include "module_basis/module_ao/ORB_gen_tables.h"
+#include "module_basis/module_nao/two_center_bundle.h"
 #include "module_cell/module_neighbor/sltk_grid_driver.h"
 #include "module_hamilt_lcao/hamilt_lcaodft/LCAO_matrix.h"
-#include "module_basis/module_ao/ORB_gen_tables.h"
 #include "module_base/vector3.h"
 #include "module_hamilt_lcao/hamilt_lcaodft/force_stress_arrays.h"
 #include "module_hamilt_lcao/hamilt_lcaodft/LCAO_HS_arrays.hpp"
@@ -24,7 +23,7 @@ namespace LCAO_domain
 			double* Hloc,
 			const UnitCell& ucell,
 			const LCAO_Orbitals& orb,
-			const ORB_gen_tables& uot,
+			const TwoCenterIntegrator& intor_orb_beta,
 			Grid_Driver* GridD);
 
 
@@ -35,7 +34,7 @@ namespace LCAO_domain
 			const bool& calc_deri,
 			const UnitCell& ucell,
 			const LCAO_Orbitals& orb,
-			const ORB_gen_tables& uot,
+			const TwoCenterIntegrator& intor_orb_beta,
 			Grid_Driver* GridD);
 
     /**
@@ -97,7 +96,7 @@ namespace LCAO_domain
 	void single_overlap(
             LCAO_Matrix& lm,
 			const LCAO_Orbitals& orb,
-			const ORB_gen_tables& uot,
+			const TwoCenterBundle& two_center_bundle,
 			const Parallel_Orbitals& pv,
 			const UnitCell& ucell,
 			const int nspin,
@@ -132,7 +131,7 @@ namespace LCAO_domain
 	void single_derivative(
             ForceStressArrays& fsr,
 			const LCAO_Orbitals& orb,
-			const ORB_gen_tables& uot,
+			const TwoCenterBundle& two_center_bundle,
 			const Parallel_Orbitals& pv,
 			const UnitCell& ucell,
 			const int nspin,
@@ -171,7 +170,7 @@ namespace LCAO_domain
 			const UnitCell& ucell,
 			const LCAO_Orbitals& orb,
 			const Parallel_Orbitals& pv,
-			const ORB_gen_tables& uot,
+			const TwoCenterBundle& two_center_bundle,
 			Grid_Driver* GridD,
 			double* SHlocR,
 			bool cal_syns = false,

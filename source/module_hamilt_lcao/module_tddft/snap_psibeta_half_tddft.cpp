@@ -22,7 +22,7 @@ void snap_psibeta_half_tddft(
 	const ModuleBase::Vector3<double> &A,
 	const bool &calc_deri) // mohan add 2021-04-25)
 {
-	ModuleBase::timer::tick("ORB_gen_tables", "snap_psibeta_half_tddft");
+	ModuleBase::timer::tick("module_tddft", "snap_psibeta_half_tddft");
 
 	//find number of projectors on atom R0
 	const int nproj = infoNL_.nproj[T0];
@@ -99,7 +99,7 @@ void snap_psibeta_half_tddft(
 
 	if (all_out)
 	{
-		ModuleBase::timer::tick("ORB_gen_tables", "snap_psibeta_half_tddft");
+		ModuleBase::timer::tick("module_tddft", "snap_psibeta_half_tddft");
 		return;
 	}
 
@@ -258,7 +258,7 @@ void snap_psibeta_half_tddft(
 	delete[] r_ridial;
     delete[] weights_ridial;
 	assert(index == natomwfc);
-	ModuleBase::timer::tick("ORB_gen_tables", "snap_psibeta_half_tddft");
+	ModuleBase::timer::tick("module_tddft", "snap_psibeta_half_tddft");
 
 	return;
 }

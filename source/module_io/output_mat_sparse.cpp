@@ -16,7 +16,7 @@ namespace ModuleIO
         const ModuleBase::matrix &v_eff,
         const Parallel_Orbitals &pv,
         Gint_k &gint_k, // mohan add 2024-04-01
-        const ORB_gen_tables* uot,
+        const TwoCenterBundle& two_center_bundle,
         LCAO_Matrix &lm,
         Grid_Driver &grid, // mohan add 2024-04-06
         const K_Vectors& kv,
@@ -29,7 +29,7 @@ namespace ModuleIO
       _v_eff(v_eff),
       _pv(pv),
       _gint_k(gint_k), // mohan add 2024-04-01
-      uot_(uot),
+      two_center_bundle_(two_center_bundle),
       _lm(lm),
       _grid(grid), // mohan add 2024-04-06
       _kv(kv),
@@ -68,7 +68,7 @@ void Output_Mat_Sparse<std::complex<double>>::write(void)
                 this->_pv, 
 				this->_lm, 
 				this->_grid,
-                uot_); // LiuXh add 2019-07-15
+                two_center_bundle_); // LiuXh add 2019-07-15
     }
 
     //! generate a file containing the derivatives of the Hamiltonian matrix (in Ry/Bohr)
@@ -80,7 +80,7 @@ void Output_Mat_Sparse<std::complex<double>>::write(void)
 				this->_gint_k, // mohan add 2024-04-01
 				this->_lm,
                 this->_grid, // mohan add 2024-04-06
-                uot_,
+                two_center_bundle_,
 				_kv); // LiuXh add 2019-07-15
 	}
 

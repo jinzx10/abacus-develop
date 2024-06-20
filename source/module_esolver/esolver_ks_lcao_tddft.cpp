@@ -431,7 +431,7 @@ void ESolver_KS_LCAO_TDDFT::after_scf(const int istep)
                                 this->psi,
                                 pelec,
                                 kv,
-                                uot_,
+                                *(uot_->two_center_bundle),
                                 tmp_DM->get_paraV_pointer(),
                                 this->RA,
                                 this->LM);     // mohan add 2024-04-02
