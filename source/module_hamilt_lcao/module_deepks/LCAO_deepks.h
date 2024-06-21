@@ -13,9 +13,8 @@
 #include "module_elecstate/module_dm/density_matrix.h"
 #include "module_hamilt_lcao/hamilt_lcaodft/LCAO_matrix.h"
 #include "module_io/winput.h"
-#include "torch/csrc/api/include/torch/linalg.h"
-#include "torch/csrc/autograd/autograd.h"
-#include "torch/script.h"
+#include <torch/torch.h>
+#include <torch/script.h>
 
 #include <unordered_map>
 
