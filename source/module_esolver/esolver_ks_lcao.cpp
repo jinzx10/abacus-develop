@@ -533,7 +533,6 @@ void ESolver_KS_LCAO<TK, TR>::init_basis_lcao(ORB_control& orb_con, Input& inp, 
     // * reading the localized orbitals/projectors
     // * construct the interpolation tables.
 
-
     two_center_bundle_.build_orb(ucell.ntype, ucell.orbital_fn);
     two_center_bundle_.build_alpha(GlobalV::deepks_setorb, &ucell.descriptor_file);
     two_center_bundle_.build_orb_onsite(ucell.ntype, GlobalV::onsite_radius);

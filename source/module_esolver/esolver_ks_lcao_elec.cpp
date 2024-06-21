@@ -411,7 +411,7 @@ void ESolver_KS_LCAO<TK, TR>::others(const int istep)
                              GlobalC::ucell,
                              GlobalV::SEARCH_RADIUS,
                              GlobalV::test_atom_input,
-                             1);
+                             true);
         return;
     }
 
@@ -569,10 +569,10 @@ void ESolver_KS_LCAO<std::complex<double>, std::complex<double>>::get_S(void)
     this->LM.ParaV = &this->orb_con.ParaV;
     if (this->p_hamilt == nullptr)
     {
-        this->p_hamilt = new hamilt::HamiltLCAO<std::complex<double>, std::complex<double>>(
-            &this->LM,
-            this->kv,
-            *(two_center_bundle_.overlap_orb));
+        this->p_hamilt
+            = new hamilt::HamiltLCAO<std::complex<double>, std::complex<double>>(&this->LM,
+                                                                                 this->kv,
+                                                                                 *(two_center_bundle_.overlap_orb));
         dynamic_cast<hamilt::OperatorLCAO<std::complex<double>, std::complex<double>>*>(this->p_hamilt->ops)
             ->contributeHR();
     }

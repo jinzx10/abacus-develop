@@ -43,7 +43,7 @@ hamilt::TDNonlocal<hamilt::OperatorLCAO<TK, TR>>::~TDNonlocal()
     }
 }
 template <typename TK, typename TR>
-void hamilt::TDNonlocal<hamilt::OperatorLCAO<TK, TR>>::init_td(void)
+void hamilt::TDNonlocal<hamilt::OperatorLCAO<TK, TR>>::init_td()
 {
     // calculate At in cartesian coorinates.
     this->cart_At = TD_Velocity::td_vel_op->cart_At;
