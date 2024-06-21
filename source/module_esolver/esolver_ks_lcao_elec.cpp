@@ -168,7 +168,7 @@ void ESolver_KS_LCAO<TK, TR>::beforesolver(const int istep)
             &(this->LOC),
             this->pelec->pot,
             this->kv,
-            *(uot_->two_center_bundle),
+            two_center_bundle_,
 #ifdef __EXX
             DM,
             GlobalC::exx_info.info_ri.real_number ? &this->exd->two_level_step : &this->exc->two_level_step);
@@ -190,7 +190,7 @@ void ESolver_KS_LCAO<TK, TR>::beforesolver(const int istep)
                                    GlobalC::ucell,
                                    GlobalC::ORB,
                                    GlobalC::GridD,
-                                   *(uot_->two_center_bundle->overlap_orb_alpha));
+                                   *(two_center_bundle_.overlap_orb_alpha));
 
         if (GlobalV::deepks_out_unittest)
         {
@@ -533,7 +533,7 @@ void ESolver_KS_LCAO<std::complex<double>, double>::get_S(void)
     {
         this->p_hamilt = new hamilt::HamiltLCAO<std::complex<double>, double>(&this->LM,
                                                                               this->kv,
-                                                                              *(uot_->two_center_bundle->overlap_orb));
+                                                                              *(two_center_bundle_.overlap_orb));
         dynamic_cast<hamilt::OperatorLCAO<std::complex<double>, double>*>(this->p_hamilt->ops)->contributeHR();
     }
 
@@ -572,7 +572,7 @@ void ESolver_KS_LCAO<std::complex<double>, std::complex<double>>::get_S(void)
         this->p_hamilt = new hamilt::HamiltLCAO<std::complex<double>, std::complex<double>>(
             &this->LM,
             this->kv,
-            *(uot_->two_center_bundle->overlap_orb));
+            *(two_center_bundle_.overlap_orb));
         dynamic_cast<hamilt::OperatorLCAO<std::complex<double>, std::complex<double>>*>(this->p_hamilt->ops)
             ->contributeHR();
     }
