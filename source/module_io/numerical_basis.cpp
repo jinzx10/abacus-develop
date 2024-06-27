@@ -152,9 +152,14 @@ void Numerical_Basis::output_overlap(const psi::Psi<std::complex<double>>& psi, 
                     }
                 }
 
-                overlap_Sq[ik] = NumericalBasis::cal_overlap_Sq(
-                    type, ucell.lmaxmax, this->bessel_basis.get_ecut_number(), INPUT.bessel_nao_rcut, tau_cart,
-                    ucell.lat0 * ucell.latvec, NumericalBasis::indexgen(natom, lmax));
+                // NOTE: the two-center integration algorithm and the construction of overlap matrix are both serial
+                // so we can only compute the overlap matrix for the first processor
+                if (GlobalV::MY_RANK == 0)
+                {
+                    overlap_Sq[ik] = NumericalBasis::cal_overlap_Sq(
+                        type, ucell.lmaxmax, this->bessel_basis.get_ecut_number(), INPUT.bessel_nao_rcut, tau_cart,
+                        ucell.lat0 * ucell.latvec, NumericalBasis::indexgen(natom, lmax));
+                }
 #endif
                 ModuleBase::GlobalFunc::DONE(GlobalV::ofs_running, "cal_overlap_Sq");
             }
@@ -168,7 +173,9 @@ void Numerical_Basis::output_overlap(const psi::Psi<std::complex<double>>& psi, 
         for (int ik = 0; ik < kv.get_nks(); ik++)
         {
             Parallel_Reduce::reduce_pool(overlap_Q[ik].ptr, overlap_Q[ik].getSize());
-            // Parallel_Reduce::reduce_pool(overlap_Sq[ik].ptr, overlap_Sq[ik].getSize());
+#ifndef __LCAO
+             Parallel_Reduce::reduce_pool(overlap_Sq[ik].ptr, overlap_Sq[ik].getSize());
+#endif
         }
         Parallel_Reduce::reduce_pool(overlap_V.c, overlap_V.nr * overlap_V.nc); // Peize Lin add 2020.04.23
 #endif

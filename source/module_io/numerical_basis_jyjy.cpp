@@ -3,7 +3,7 @@
 #include "module_base/matrix3.h"
 #include "module_base/vector3.h"
 #include "module_basis/module_nao/two_center_integrator.h"
-
+#define __LCAO
 namespace NumericalBasis
 {
 #ifdef __LCAO
@@ -50,7 +50,7 @@ ModuleBase::ComplexArray cal_overlap_Sq(const char type, const int lmax, const i
     RadialCollection orb;
     orb.build(lmax, nbes, rcut, 0.0, dr);
 
-    ModuleBase::SphericalBesselTransformer sbt;
+    ModuleBase::SphericalBesselTransformer sbt(true);
     orb.set_transformer(sbt);
 
     const double rmax = orb.rcut_max() * 2.0;
