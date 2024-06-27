@@ -8,14 +8,14 @@
 
 class Center2_Orb
 {
-public:
-	class Orb11;
-	class Orb21;
-	class Orb22;
+  public:
+    class Orb11;
+    class Orb21;
+    class Orb22;
 
     // The following functions used to be in module_ao/ORB_table_phi.h
 
     static int get_rmesh(const double& R1, const double& R2, const double dr);
 };
 
-#endif //CENTER2_ORB_H
+#endif // CENTER2_ORB_H

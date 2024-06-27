@@ -3,9 +3,9 @@
 // DATE : 2016-01-24
 //=========================================================
 
-#include "center2_orb.h"
 #include "center2_orb-orb11.h"
 
+#include "center2_orb.h"
 #include "module_base/constants.h"
 #include "module_base/math_polyint.h"
 #include "module_base/sph_bessel_recursive.h"
@@ -21,7 +21,7 @@ Center2_Orb::Orb11::Orb11(const Numerical_Orbital_Lm& nA_in,
 {
 }
 
-void Center2_Orb::Orb11::init_radial_table(void)
+void Center2_Orb::Orb11::init_radial_table()
 {
     const int LA = this->nA.getL();
     const int LB = this->nB.getL();

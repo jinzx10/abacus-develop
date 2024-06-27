@@ -1,4 +1,5 @@
 #include "center2_orb.h"
+
 #include "module_base/tool_quit.h"
 
 int Center2_Orb::get_rmesh(const double& R1, const double& R2, const double dr)
@@ -19,4 +20,3 @@ int Center2_Orb::get_rmesh(const double& R1, const double& R2, const double dr)
     }
     return rmesh;
 }
-

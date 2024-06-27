@@ -68,8 +68,18 @@ void ORB_gen_tables::gen_tables(std::ofstream& ofs_in,
     int Rmesh = static_cast<int>(orb.get_Rmax() / dr) + 4;
     Rmesh += 1 - Rmesh % 2;
 
-
-    MOT.init_Table_Spherical_Bessel(orb_num, mode, Lmax_used, Lmax, Lmax_exx, lmax_orb, lmax_beta, dr, dk, kmesh, Rmesh, MOT.pSB);
+    MOT.init_Table_Spherical_Bessel(orb_num,
+                                    mode,
+                                    Lmax_used,
+                                    Lmax,
+                                    Lmax_exx,
+                                    lmax_orb,
+                                    lmax_beta,
+                                    dr,
+                                    dk,
+                                    kmesh,
+                                    Rmesh,
+                                    MOT.pSB);
 
     // calculate S(R) for interpolation
     MOT.init_Table(orb);
