@@ -834,27 +834,15 @@ void ORB_table_phi::init_Table_Spherical_Bessel(const int orb_num,
                                                 int& Lmax_used,
                                                 int& Lmax,
                                                 const int& Lmax_exx,
-                                                const LCAO_Orbitals& orb,
-                                                const Numerical_Nonlocal* beta_,
+                                                const int lmax_orb,
+                                                const int lmax_beta,
+                                                const double dr,
+                                                const double dk,
+                                                const int kmesh,
+                                                const int Rmesh,
                                                 ModuleBase::Sph_Bessel_Recursive::D2*& psb)
 {
     ModuleBase::TITLE("ORB_table_phi", "init_Table_Spherical_Bessel");
-
-    const double dr = orb.get_dR();
-    const double dk = orb.get_dk();
-    const int kmesh = orb.get_kmesh() * 4 + 1;
-    // multiplied by kmesh_times (default to 4 in module_ri) and add 1 to make it odd
-
-    int Rmesh = static_cast<int>(orb.get_Rmax() / dr) + 4;
-    Rmesh += 1 - Rmesh % 2;
-
-    const int ntype = orb.get_ntype();
-    int lmax_orb = -1, lmax_beta = -1;
-    for (int it = 0; it < ntype; it++)
-    {
-        lmax_orb = std::max(lmax_orb, orb.Phi[it].getLmax());
-        lmax_beta = std::max(lmax_beta, beta_[it].getLmax());
-    }
 
     init_Lmax(orb_num, mode, Lmax_used, Lmax, Lmax_exx, lmax_orb, lmax_beta); // Peize Lin add 2016-01-26
 

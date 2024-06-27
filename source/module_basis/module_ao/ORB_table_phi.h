@@ -64,8 +64,12 @@ class ORB_table_phi
                                             int& Lmax_used,
                                             int& Lmax,
                                             const int& Lmax_exx,
-                                            const LCAO_Orbitals& orb,
-                                            const Numerical_Nonlocal* beta_,
+                                            const int lmax_orb,
+                                            const int lmax_beta,
+                                            const double dr,
+                                            const double dk,
+                                            const int kmesh,
+                                            const int Rmesh,
                                             ModuleBase::Sph_Bessel_Recursive::D2*& psb);
 
     // Wenfei 2021-8-26, plot table elements against R

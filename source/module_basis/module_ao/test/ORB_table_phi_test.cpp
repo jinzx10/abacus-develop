@@ -50,9 +50,6 @@
  *   save input array to file
  *   (only one 1-d array, this function may need some refactoring in the future)
  *
- * Fuctions to be refactored in future:
- * - init_Table_Spherical_Bessel
- * - init_Lmax
  ***********************************************************/
 
 class OrbTablePhiTest : public ::testing::Test
