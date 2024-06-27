@@ -56,8 +56,8 @@ class ORB_table_phi
                           int& Lmax_used,
                           int& Lmax,
                           const int& Lmax_exx,
-                          const LCAO_Orbitals& orb,
-                          const Numerical_Nonlocal* beta_);
+                          const int lmax_orb,
+                          const int lmax_beta);
 
     static void init_Table_Spherical_Bessel(const int orb_num,
                                             const int mode,
@@ -94,10 +94,10 @@ class ORB_table_phi
     ModuleBase::IntArray OV_Opair;
     ModuleBase::IntArray OV_L2plus1;
 
-    static int get_rmesh(const double& R1, const double& R2, const double dr);
-
     double dr;
     int Rmesh;
+
+    static int get_rmesh(const double& R1, const double& R2, const double dr);
 
     static void cal_ST_Phi12_R(const int& job,
                                const int& l,

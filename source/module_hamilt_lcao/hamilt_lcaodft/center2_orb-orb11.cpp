@@ -3,6 +3,7 @@
 // DATE : 2016-01-24
 //=========================================================
 
+#include "center2_orb.h"
 #include "center2_orb-orb11.h"
 
 #include "module_base/constants.h"
@@ -31,7 +32,7 @@ void Center2_Orb::Orb11::init_radial_table(void)
             continue;
         }
 
-        const int rmesh = ORB_table_phi::get_rmesh(this->nA.getRcut(), this->nB.getRcut(), dr_);
+        const int rmesh = Center2_Orb::get_rmesh(this->nA.getRcut(), this->nB.getRcut(), dr_);
 
         this->Table_r[LAB].resize(rmesh, 0);
         this->Table_dr[LAB].resize(rmesh, 0);
@@ -53,7 +54,7 @@ void Center2_Orb::Orb11::init_radial_table(const std::set<size_t>& radials)
     const int LA = this->nA.getL();
     const int LB = this->nB.getL();
 
-    const size_t rmesh = ORB_table_phi::get_rmesh(this->nA.getRcut(), this->nB.getRcut(), dr_);
+    const size_t rmesh = Center2_Orb::get_rmesh(this->nA.getRcut(), this->nB.getRcut(), dr_);
 
     std::set<size_t> radials_used;
     for (const size_t& ir: radials)
@@ -130,7 +131,7 @@ double Center2_Orb::Orb11::cal_overlap(const ModuleBase::Vector3<double>& RA,
             const double Interp_Tlm
                 = (distance > tiny2)
                       ? ModuleBase::PolyInt::Polynomial_Interpolation(tb_r.second.data(),
-                                                                      ORB_table_phi::get_rmesh(RcutA, RcutB, dr_),
+                                                                      Center2_Orb::get_rmesh(RcutA, RcutB, dr_),
                                                                       dr_,
                                                                       distance)
                       : tb_r.second.at(0);
@@ -200,7 +201,7 @@ ModuleBase::Vector3<double> Center2_Orb::Orb11::cal_grad_overlap( // caoyu add 2
             const double Interp_Tlm
                 = (distance > tiny2)
                       ? ModuleBase::PolyInt::Polynomial_Interpolation(tb_r.second.data(),
-                                                                      ORB_table_phi::get_rmesh(RcutA, RcutB, dr_),
+                                                                      Center2_Orb::get_rmesh(RcutA, RcutB, dr_),
                                                                       dr_,
                                                                       distance)
                       : tb_r.second.at(0);
@@ -208,7 +209,7 @@ ModuleBase::Vector3<double> Center2_Orb::Orb11::cal_grad_overlap( // caoyu add 2
             const double grad_Interp_Tlm
                 = (distance > tiny2)
                       ? ModuleBase::PolyInt::Polynomial_Interpolation(this->Table_dr.at(LAB).data(),
-                                                                      ORB_table_phi::get_rmesh(RcutA, RcutB, dr_),
+                                                                      Center2_Orb::get_rmesh(RcutA, RcutB, dr_),
                                                                       dr_,
                                                                       distance) // Interp(Table_dr)
                             - Interp_Tlm * LAB / distance
