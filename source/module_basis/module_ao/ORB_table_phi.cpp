@@ -764,33 +764,9 @@ void ORB_table_phi::init_Lmax(const int orb_num,
                               int& Lmax_used,
                               int& Lmax,
                               const int& Lmax_exx,
-                              const LCAO_Orbitals& orb,
-                              const Numerical_Nonlocal* beta_)
+                              const int lmax_orb,
+                              const int lmax_beta)
 {
-
-    auto cal_Lmax_Phi = [](int& Lmax, const LCAO_Orbitals& orb) {
-        // obtain maxL of all type
-        const int ntype = orb.get_ntype();
-        for (int it = 0; it < ntype; it++)
-        {
-            Lmax = std::max(Lmax, orb.Phi[it].getLmax());
-        }
-    };
-
-    auto cal_Lmax_Beta = [](int& Lmax, const LCAO_Orbitals& orb, const Numerical_Nonlocal* beta_) {
-        // fix bug.
-        // mohan add the nonlocal part.
-        // 2011-03-07
-        const int ntype = orb.get_ntype();
-        for (int it = 0; it < ntype; it++)
-        {
-            Lmax = std::max(Lmax, beta_[it].getLmax());
-        }
-    };
-    auto cal_Lmax_Alpha = [](int& Lmax, const LCAO_Orbitals& orb) {
-        // caoyu add 2021-08-05 for descriptor basis
-        Lmax = std::max(Lmax, orb.get_lmax_d());
-    };
 
     Lmax = -1;
 
@@ -800,8 +776,7 @@ void ORB_table_phi::init_Lmax(const int orb_num,
         switch (mode)
         {
         case 1: // used in <Phi|Phi> or <Beta|Phi>
-            cal_Lmax_Phi(Lmax, orb);
-            cal_Lmax_Beta(Lmax, orb, beta_);
+            Lmax = std::max({Lmax, lmax_orb, lmax_beta});
             // use 2lmax+1 in dS
             Lmax_used = 2 * Lmax + 1;
             break;
@@ -810,7 +785,7 @@ void ORB_table_phi::init_Lmax(const int orb_num,
             Lmax_used = 2 * Lmax + 1;
             break;
         case 3: // used in berryphase by jingan
-            cal_Lmax_Phi(Lmax, orb);
+            Lmax = std::max(Lmax, lmax_orb);
             Lmax++;
             Lmax_used = 2 * Lmax + 1;
             break;
@@ -823,7 +798,7 @@ void ORB_table_phi::init_Lmax(const int orb_num,
         switch (mode)
         {
         case 1: // used in <jY|PhiPhi> or <Abfs|PhiPhi>
-            cal_Lmax_Phi(Lmax, orb);
+            Lmax = std::max(Lmax, lmax_orb);
             Lmax_used = 2 * Lmax + 1;
             Lmax = std::max(Lmax, Lmax_exx);
             Lmax_used += Lmax_exx;
@@ -837,7 +812,7 @@ void ORB_table_phi::init_Lmax(const int orb_num,
         switch (mode)
         {
         case 1: // used in <PhiPhi|PhiPhi>
-            cal_Lmax_Phi(Lmax, orb);
+            Lmax = std::max(Lmax, lmax_orb);
             Lmax_used = 2 * (2 * Lmax + 1);
             break;
         default:
@@ -859,22 +834,17 @@ void ORB_table_phi::init_Table_Spherical_Bessel(const int orb_num,
                                                 int& Lmax_used,
                                                 int& Lmax,
                                                 const int& Lmax_exx,
-                                                const LCAO_Orbitals& orb,
-                                                const Numerical_Nonlocal* beta_,
-                                                ModuleBase::Sph_Bessel_Recursive::D2*& psb,
-                                                const int kmesh_times,
-                                                const int rmesh_times)
+                                                const int lmax_orb,
+                                                const int lmax_beta,
+                                                const double dr,
+                                                const double dk,
+                                                const int kmesh,
+                                                const int Rmesh,
+                                                ModuleBase::Sph_Bessel_Recursive::D2*& psb)
 {
     ModuleBase::TITLE("ORB_table_phi", "init_Table_Spherical_Bessel");
 
-    const double dr = orb.get_dR();
-    const double dk = orb.get_dk();
-    const int kmesh = orb.get_kmesh() * kmesh_times + 1;
-
-    int Rmesh = static_cast<int>(rmesh_times * orb.get_Rmax() / dr) + 4;
-    Rmesh += 1 - Rmesh % 2;
-
-    init_Lmax(orb_num, mode, Lmax_used, Lmax, Lmax_exx, orb, beta_); // Peize Lin add 2016-01-26
+    init_Lmax(orb_num, mode, Lmax_used, Lmax, Lmax_exx, lmax_orb, lmax_beta); // Peize Lin add 2016-01-26
 
     for (auto& sb: ModuleBase::Sph_Bessel_Recursive_Pool::D2::sb_pool)
     {

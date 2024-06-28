@@ -56,19 +56,21 @@ class ORB_table_phi
                           int& Lmax_used,
                           int& Lmax,
                           const int& Lmax_exx,
-                          const LCAO_Orbitals& orb,
-                          const Numerical_Nonlocal* beta_);
+                          const int lmax_orb,
+                          const int lmax_beta);
 
     static void init_Table_Spherical_Bessel(const int orb_num,
                                             const int mode,
                                             int& Lmax_used,
                                             int& Lmax,
                                             const int& Lmax_exx,
-                                            const LCAO_Orbitals& orb,
-                                            const Numerical_Nonlocal* beta_,
-                                            ModuleBase::Sph_Bessel_Recursive::D2*& psbi,
-                                            const int kmesh_times = 4,
-                                            const int rmesh_times = 1);
+                                            const int lmax_orb,
+                                            const int lmax_beta,
+                                            const double dr,
+                                            const double dk,
+                                            const int kmesh,
+                                            const int Rmesh,
+                                            ModuleBase::Sph_Bessel_Recursive::D2*& psb);
 
     // Wenfei 2021-8-26, plot table elements against R
     void plot_table(const std::string filename, const int rmesh, double* column);
@@ -96,10 +98,10 @@ class ORB_table_phi
     ModuleBase::IntArray OV_Opair;
     ModuleBase::IntArray OV_L2plus1;
 
-    static int get_rmesh(const double& R1, const double& R2, const double dr);
-
     double dr;
     int Rmesh;
+
+    static int get_rmesh(const double& R1, const double& R2, const double dr);
 
     static void cal_ST_Phi12_R(const int& job,
                                const int& l,

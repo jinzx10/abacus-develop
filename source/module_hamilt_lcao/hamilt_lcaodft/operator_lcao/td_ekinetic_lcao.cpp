@@ -210,7 +210,32 @@ void TDEkinetic<OperatorLCAO<TK, TR>>::init_td(void)
                        orb.get_dR(),                          // delta R, for making radial table
                        orb.get_dk());                         // Peize Lin change 2017-04-16
     int Lmax_used, Lmax;
-    ORB_table_phi::init_Table_Spherical_Bessel(2, 1, Lmax_used, Lmax, 1, orb, this->ucell->infoNL.Beta, MOT.pSB);
+
+    const int ntype = orb.get_ntype();
+    int lmax_orb = -1, lmax_beta = -1;
+    for (int it = 0; it < ntype; it++)
+    {
+        lmax_orb = std::max(lmax_orb, orb.Phi[it].getLmax());
+        lmax_beta = std::max(lmax_beta, this->ucell->infoNL.Beta[it].getLmax());
+    }
+    const double dr = orb.get_dR();
+    const double dk = orb.get_dk();
+    const int kmesh = orb.get_kmesh() * 4 + 1;
+    int Rmesh = static_cast<int>(orb.get_Rmax() / dr) + 4;
+    Rmesh += 1 - Rmesh % 2;
+
+    ORB_table_phi::init_Table_Spherical_Bessel(2,
+                                               1,
+                                               Lmax_used,
+                                               Lmax,
+                                               1,
+                                               lmax_orb,
+                                               lmax_beta,
+                                               dr,
+                                               dk,
+                                               kmesh,
+                                               Rmesh,
+                                               MOT.pSB);
 
     //=========================================
     // (2) init Ylm Coef

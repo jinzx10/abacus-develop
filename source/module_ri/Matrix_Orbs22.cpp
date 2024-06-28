@@ -25,16 +25,32 @@ void Matrix_Orbs22::init(const int mode, const double kmesh_times, const double 
         //		GlobalC::ORB.get_dk() / kmesh_times);				// delta k, for integration in k space
         GlobalC::ORB.get_dk()); // Peize Lin change 2017-04-16
     int Lmax_used, Lmax;
+
+    const int ntype = GlobalC::ORB.get_ntype();
+    int lmax_orb = -1, lmax_beta = -1;
+    for (int it = 0; it < ntype; it++)
+    {
+        lmax_orb = std::max(lmax_orb, GlobalC::ORB.Phi[it].getLmax());
+        lmax_beta = std::max(lmax_beta, GlobalC::ucell.infoNL.Beta[it].getLmax());
+    }
+    const double dr = GlobalC::ORB.get_dR();
+    const double dk = GlobalC::ORB.get_dk();
+    const int kmesh = GlobalC::ORB.get_kmesh() * kmesh_times + 1;
+    int Rmesh = static_cast<int>(GlobalC::ORB.get_Rmax() * rmesh_times / dr) + 4;
+    Rmesh += 1 - Rmesh % 2;
+
     ORB_table_phi::init_Table_Spherical_Bessel(4,
                                                mode,
                                                Lmax_used,
                                                Lmax,
                                                GlobalC::exx_info.info_ri.abfs_Lmax,
-                                               GlobalC::ORB,
-                                               GlobalC::ucell.infoNL.Beta,
-                                               MOT.pSB,
-                                               kmesh_times,
-                                               rmesh_times);
+                                               lmax_orb,
+                                               lmax_beta,
+                                               dr,
+                                               dk,
+                                               kmesh,
+                                               Rmesh,
+                                               MOT.pSB);
     //	this->MOT.init_OV_Tpair();							// for this->MOT.OV_L2plus1
     //	this->MOT.Destroy_Table_Spherical_Bessel (Lmax_used);				// why?
 

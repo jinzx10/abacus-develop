@@ -38,6 +38,7 @@ list(APPEND depend_files
   ../parallel_2d.cpp
   ../parallel_orbitals.cpp
   ../../../module_hamilt_lcao/hamilt_lcaodft/center2_orb-orb11.cpp
+  ../../../module_hamilt_lcao/hamilt_lcaodft/center2_orb.cpp
   )
 AddTest(
   TARGET orbital_equal_test
