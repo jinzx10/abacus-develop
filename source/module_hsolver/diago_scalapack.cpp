@@ -9,10 +9,6 @@
 
 #include <cassert>
 #include <cstring>
-#include <numeric>
-#include <stdexcept>
-#include <string>
-#include <unistd.h>
 
 #include "module_base/global_function.h"
 #include "module_base/global_variable.h"
@@ -391,7 +387,7 @@ int canon_diag(
         eigen.data(), psi.get_pointer(), h_mat.desc
     );
     
-        const int inc = 1;
+    const int inc = 1;
     BlasConnector::copy(GlobalV::NBANDS, eigen.data(), inc, eigenvalue_in, inc);
 }
     template<>
@@ -688,7 +684,7 @@ int canon_diag(
              gap.data(),
              &info);
     //	GlobalV::ofs_running<<"M="<<M<<"\t"<<"NZ="<<NZ<<std::endl;
-    
+
     if (info == 0) {
         return std::make_pair(info, std::vector<int>{});
     } else if (info < 0) {
@@ -813,6 +809,4 @@ int canon_diag(
         throw std::runtime_error(str_info_FILE);
     }
 }
-
-
 } // namespace hsolver
