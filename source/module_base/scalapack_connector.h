@@ -128,6 +128,44 @@ extern "C"
 	void Cpzgemr2d (int m, int n, std::complex<double> *ptrmyblock, int ia, int ja, int *ma, std::complex<double> *ptrmynewblock, int ib, int jb, int *mb, int globcontext);
 	void Cpsgemr2d (int m, int n, float *ptrmyblock, int ia, int ja, int *ma, float *ptrmynewblock, int ib, int jb, int *mb, int globcontext);
 	void Cpcgemr2d (int m, int n, std::complex<float> *ptrmyblock, int ia, int ja, int *ma, std::complex<float> *ptrmynewblock, int ib, int jb, int *mb, int globcontext);
+
+    // real symmetric eigenvalue problem (selected eigenpairs)
+    void pdsyevx_(
+        const char* jobz, const char* range, const char* uplo,
+        const int* n,
+        double* a, const int* ia, const int* ja, const int* desca,
+        const double* vl, const double* vu, const int* il, const int* iu,
+        const double* abstol,
+        int* m, int* nz,
+        double* w,
+        double* orfac,
+        double* z, const int* iz, const int* jz, const int* descz,
+        double* work, const int* lwork, int* iwork, const int* liwork,
+        int* ifail, int* icluster, double* gap,
+        int* info
+    );
+
+    // complex Hermitian eigenvalue problem (selected eigenpairs)
+    void pzheevx_(
+        const char* jobz, const char* range, const char* uplo,
+        const int* n,
+        std::complex<double>* a, const int* ia, const int* ja, const int* desca,
+        const double* vl, const double* vu, const int* il, const int* iu,
+        const double* abstol,
+        int* m, int* nz,
+        double* w,
+        double* orfac,
+        std::complex<double>* z, const int* iz, const int* jz, const int* descz,
+        std::complex<double>* work, const int* lwork, double* rwork, const int* lrwork, int* iwork, const int* liwork,
+        int* ifail, int* icluster, double* gap,
+        int* info
+    );
+
+    // double precision machine parameters (for `abstol` in several functions)
+    double pdlamch_(int* ictxt, const char* cmach);
+
+
+
 }
 
 	template <typename T>
