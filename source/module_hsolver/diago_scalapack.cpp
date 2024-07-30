@@ -9,6 +9,10 @@
 
 #include <cassert>
 #include <cstring>
+#include <numeric>
+#include <stdexcept>
+#include <string>
+#include <unistd.h>
 
 #include "module_base/global_function.h"
 #include "module_base/global_variable.h"
@@ -20,6 +24,324 @@ typedef hamilt::MatrixBlock<std::complex<double>> matcd;
 
 namespace hsolver
 {
+
+template <typename T>
+void pdiagx(int n, int nbands, T* A, const int* desca, double* w, T* z, const int* descz) {
+    /**
+     * Standard eigenvalue decomposition returning the first `nbands` eigenpairs.
+     *
+     */
+    static_assert(std::is_same<T, double>::value ||
+                  std::is_same<T, std::complex<double>>::value,
+                  "T must be double or std::complex<double>");
+
+    bool is_cplx = std::is_same<T, std::complex<double>>::value;
+
+    const int one_i = 1;
+
+    // get number of procs involved in this diagonalization
+    // relevant for the output parameters iclustr and gap
+    int blacs_ctxt = desca[1];
+    int nprow, npcol, myrow, mycol, nprocs;
+    Cblacs_gridinfo(blacs_ctxt, &nprow, &npcol, &myrow, &mycol);
+    nprocs = nprow * npcol;
+
+    // input parameters
+    char range = (nbands == n) ? 'A' : 'I';
+    double vl = 0.0, vu = 1.0;
+    double abstol = 2.0 * pdlamch_(&blacs_ctxt, "S");
+    int m = 0, nz = 0;
+    double orfac = -1.0;
+
+    // work space
+    int lwork = -1, liwork = -1, lrwork = -1;
+    std::vector<T> work(3);
+    std::vector<double> rwork(3); // used in complex case only
+    std::vector<int> iwork(1);
+
+    // output informational parameters
+    std::vector<int> ifail(n);
+    std::vector<int> iclustr(2 * nprocs);
+    std::vector<double> gap(nprocs);
+    int info = 0;
+
+    std::function<void()> eigen;
+    if (is_cplx) {
+        eigen = [&]() {
+            pzheevx_(
+                "V", &range, "U",
+                &n,
+                reinterpret_cast<std::complex<double>*>(A), &one_i, &one_i, desca,
+                &vl, &vu, &one_i, &nbands,
+                &abstol,
+                &m, &nz,
+                w,
+                &orfac,
+                reinterpret_cast<std::complex<double>*>(z), &one_i, &one_i, descz,
+                reinterpret_cast<std::complex<double>*>(work.data()), &lwork,
+                rwork.data(), &lrwork, iwork.data(), &liwork,
+                ifail.data(), iclustr.data(), gap.data(),
+                &info
+            );
+        };
+    } else {
+        eigen = [&]() {
+            pdsyevx_(
+                "V", &range, "U",
+                &n,
+                reinterpret_cast<double*>(A), &one_i, &one_i, desca,
+                &vl, &vu, &one_i, &nbands,
+                &abstol,
+                &m, &nz,
+                w,
+                &orfac,
+                reinterpret_cast<double*>(z), &one_i, &one_i, descz,
+                reinterpret_cast<double*>(work.data()), &lwork, iwork.data(), &liwork,
+                ifail.data(), iclustr.data(), gap.data(),
+                &info
+            );
+        };
+    }
+
+    // the first call is a work space query
+    eigen();
+
+    lwork = std::real(work[0]);
+    work.resize(std::max(lwork, 3));
+    liwork = iwork[0];
+    iwork.resize(liwork);
+    if (is_cplx) {
+        lrwork = rwork[0];
+        rwork.resize(std::max(lrwork, 3));
+    }
+
+    // actual diagonalization
+    eigen();
+
+    if (info == 0) { // successful calculation
+        return;
+    }
+
+    //======================================================================
+
+    // re-run calculation with updated parameters or throw error if necessary
+    std::string solver = is_cplx ? "pzheevx" : "pdsyevx";
+    std::string location = "file " __FILE__ " line "  + std::to_string(__LINE__);
+    if (info < 0) {
+        info = -info;
+        if (info > 100) {
+            throw std::runtime_error(location + " the " + std::to_string(info % 100)
+                    + "-th entry in the " + std::to_string(info / 100)
+                    + "-th argument of " + solver + "is illegal.\n");
+        } else {
+            throw std::runtime_error(location + " the " + std::to_string(info)
+                    + "-th argument of " + solver + "is illegal.\n");
+        }
+    } else if (info % 2) {
+        std::string ifail_str = "ifail = ";
+        for (auto it = ifail.begin(); it != ifail.end(); ++it) {
+            if (*it != 0) {
+                ifail_str += std::to_string(*it) + " ";
+            }
+        }
+        throw std::runtime_error(location + "one or more eigenvectors failed to converge:"
+                + ifail_str);
+    } else if (info / 2 % 2) {
+
+        // TODO A has been destroyed; should make a copy before
+
+        int degeneracy_need = 0;
+        for (int irank = 0; irank < GlobalV::DSIZE; ++irank) {
+            degeneracy_need = std::max(degeneracy_need, vec[2 * irank + 1] - vec[2 * irank]);
+}
+        const std::string str_need = "degeneracy_need = " + ModuleBase::GlobalFunc::TO_STRING(degeneracy_need) + ".\n";
+        const std::string str_saved
+            = "degeneracy_saved = " + ModuleBase::GlobalFunc::TO_STRING(this->degeneracy_max) + ".\n";
+        if (degeneracy_need <= this->degeneracy_max)
+        {
+            throw std::runtime_error(str_info_FILE + str_need + str_saved);
+        }
+        else
+        {
+            GlobalV::ofs_running << str_need << str_saved;
+            this->degeneracy_max = degeneracy_need;
+            return;
+        }
+    } else if (info / 4 % 2) {
+        throw std::runtime_error(location + " space limit (should never occur since the \
+            function is called with index-based range selection)");
+    } else if (info / 8 % 2) {
+        throw std::runtime_error(location + " fails to compute eigenvalues");
+    } else {
+        throw std::runtime_error(location + " unknown info");
+    }
+}
+
+
+template <typename T>
+int canon_diag(
+    int nrow_loc, int ncol_loc,
+    int n_glb, int nbands,
+    T* H, T* S, const int* desc_HS,
+    double* E, T* C, const int* desc_C,
+    double thr = 1e-5
+) {
+    /**
+     * Solve a generalized eigenvalue problem H*C = S*C*E with canonical orthogonalization.
+     *
+     * Given a potentially singular generalized eigenvalue problem (i.e., the basis
+     * are almost linearly dependent so S might has tiny eigenvalues), this function
+     *
+     * 1. diagonalizes S
+     * 2. selects the subset of eigenvectors, denote X, corresponding to non-tiny eigenvalues
+     * 3. rescales X column-wise by diag(1/sqrt(val_S))
+     * 4. forms subspace Hamiltonian H_sub = X^H * H * X (^H denotes Hermitian conjugate)
+     * 5. solves the eigenvalue problem H_sub * C_sub = C_sub * E
+     * 6. gets the eigenvectors of the original problem C = X * C_sub
+     *
+     */
+
+    static_assert(std::is_same<T, double>::value ||
+                  std::is_same<T, std::complex<double>>::value,
+                  "T must be double or std::complex<double>");
+
+    bool is_cplx = std::is_same<T, std::complex<double>>::value;
+
+    // number of elements in the local matrix of H/S/vec_S
+    size_t nelem_loc = static_cast<size_t>(nrow_loc) * ncol_loc;
+
+    // BLACS context
+    int ctxt = desc_HS[1];
+
+    // size of the square block in block-cyclic distribution
+    int nb = desc_HS[4];
+
+    //====== allocate memory for temporary arrays ======
+    // S_copy, H_sub                            <-- at most nelem_loc
+    // vec_S (eigenvectors of S, including X)   <-- nelem_loc
+    // X^H * H, V_sub (eigenvectors of H_sub)   <-- at most nelem_loc
+    // val_S (eigenvalues of S)                 <-- n_glb, always real
+    size_t buf_size = 3 * nelem_loc + n_glb * sizeof(double) / sizeof(T)
+                    + (is_cplx && (n_glb % 2));
+    std::vector<T> buffer(buf_size);
+
+    // a copy of S (prevent pdsyevx from destroying the input S)
+    T* S_copy = buffer.data();
+
+    // H_sub = X^H * H * X; NOTE: H_sub and S_copy do not coexist
+    T* H_sub = S_copy;
+
+    // eigenvectors of S (becomes X after rescaled by 1/sqrt(val_S))
+    T* vec_S = H_sub + nelem_loc;
+
+    // X^H * H
+    T* XhH = vec_S + nelem_loc;
+
+    // eigenvectors of H_sub; NOTE: C_sub and XhH do not coexist
+    T* C_sub = XhH;
+
+    // eigenvalues of S
+    double* val_S = reinterpret_cast<double*>(C_sub + nelem_loc);
+
+
+    // block-cyclic distribution of H/S/vec_S
+    Parallel_2D p2d_HS;
+    p2d_HS.set(n_glb, n_glb, nb, ctxt);
+
+
+    //====== 1. eigen-decomposition of S ======
+    std::copy(S, S + nelem_loc, S_copy);
+    pdiagx(n_glb, n_glb, S_copy, desc_HS, val_S, vec_S, desc_HS);
+
+
+    //====== 2. find the number of tiny eigenvalues below thr ======
+    // number of tiny eigenvalues of S below thr
+    int n_tiny = std::find_if(val_S, val_S + n_glb, [thr](double x) { return x > thr; }) - val_S;
+
+    // the "true dimension" of the eigenvalue problem (linear dependency removed)
+    int dim = n_glb - n_tiny;
+
+    //======= 3. transformation matrix of canonical orthogonalization ======
+    // rescale U column-wise by diag(1/sqrt(o)) (tiny eigenvalues are excluded)
+    for (int col_glb = n_tiny; col_glb < n_glb; ++col_glb) {
+        if (p2d_HS.global2local_col(col_glb) != -1) { // if the column is in the local matrix
+            // we do an in-place scaling of vec_S
+            int col_loc = p2d_HS.global2local_col(col_glb);
+            double inv_sqrt = 1.0 / std::sqrt(val_S[col_glb]);
+            for (int row_loc = 0; row_loc < nrow_loc; ++row_loc) {
+                vec_S[row_loc + col_loc * nrow_loc] *= inv_sqrt;
+            }
+        }
+    }
+
+    // from now on, the canonical transformation matrix X = vec_S[:, n_tiny:]
+
+    // block-cyclic distribution of H_sub/C_sub
+    Parallel_2D p2d_sub;
+    p2d_sub.set(dim, dim, nb, ctxt);
+
+    // block-cyclic distribution of X^H * H
+    Parallel_2D p2d_XhH;
+    p2d_XhH.set(dim, n_glb, nb, ctxt);
+
+    //======= 4. form H_sub = X^H * H * X ======
+    const T one_f = 1.0;
+    const T zero_f = 0.0;
+    const int one_i = 1;
+    int icol = 1 + n_tiny; // the first column of U to be used (fortran convention)
+
+    // X^H * H
+    ScalapackConnector::gemm(
+        is_cplx ? 'C':'T', 'N',
+        dim, n_glb, n_glb,
+        one_f,
+        vec_S, one_i, icol, desc_HS,
+        H, one_i, one_i, desc_HS,
+        zero_f,
+        XhH, one_i, one_i, p2d_XhH.desc
+    );
+
+    // H_sub = X^H * H * X
+    ScalapackConnector::gemm(
+        'N', 'N',
+        dim, dim, n_glb,
+        one_f,
+        XhH, one_i, one_i, p2d_XhH.desc,
+        vec_S, one_i, icol, desc_HS,
+        zero_f,
+        H_sub, one_i, one_i, p2d_sub.desc
+    );
+
+    //======= 5. eigen-decomposition of H_sub ======
+    // NOTE: the documentation of pdsyevx/pzheevx suggests that the array for
+    // holding eigenvectors (C_sub) be square, even if only a selected range of
+    // eigenpairs is requested. This is checked by its array descriptor.
+    // It might be sufficient to pass a descriptor of a square-sized matrix
+    // but allocate a smaller memory for C_sub which is just enough for holding
+    // the eigenvectors of interest, but whether this is safe is not clear.
+    pdiagx(dim, nbands, H_sub, p2d_sub.desc, E, C_sub, p2d_sub.desc);
+
+    // print ekb
+    //for (int i = 0; i < 5; ++i) {
+    //    std::cout << "E[" << i << "] = " << E[i] << std::endl;
+    //}
+    //std::cout << std::endl;
+
+    //======= transform the eigenvectors back ======
+    // C = X * C_sub
+    ScalapackConnector::gemm(
+        'N', 'N',
+        n_glb, nbands, dim,
+        one_f,
+        vec_S, one_i, icol, desc_HS,
+        C_sub, one_i, one_i, p2d_sub.desc,
+        zero_f,
+        C, one_i, one_i, desc_C
+    );
+
+    return n_tiny;
+}
+
     template<>
     void DiagoScalapack<double>::diag(hamilt::Hamilt<double>* phm_in, psi::Psi<double>& psi, Real* eigenvalue_in)
 {
@@ -28,8 +350,16 @@ namespace hsolver
     phm_in->matrix(h_mat, s_mat);
     assert(h_mat.col == s_mat.col && h_mat.row == s_mat.row && h_mat.desc == s_mat.desc);
     std::vector<double> eigen(GlobalV::NLOCAL, 0.0);
-    this->pdsygvx_diag(h_mat.desc, h_mat.col, h_mat.row, h_mat.p, s_mat.p, eigen.data(), psi);
-    const int inc = 1;
+
+    //this->pdsygvx_diag(h_mat.desc, h_mat.col, h_mat.row, h_mat.p, s_mat.p, eigen.data(), psi);
+    canon_diag(
+        h_mat.row, h_mat.col,
+        GlobalV::NLOCAL, GlobalV::NBANDS,
+        h_mat.p, s_mat.p, h_mat.desc,
+        eigen.data(), psi.get_pointer(), h_mat.desc
+    );
+    
+        const int inc = 1;
     BlasConnector::copy(GlobalV::NBANDS, eigen.data(), inc, eigenvalue_in, inc);
 }
     template<>
@@ -40,7 +370,35 @@ namespace hsolver
     phm_in->matrix(h_mat, s_mat);
     assert(h_mat.col == s_mat.col && h_mat.row == s_mat.row && h_mat.desc == s_mat.desc);
     std::vector<double> eigen(GlobalV::NLOCAL, 0.0);
+
+    canon_diag(
+        h_mat.row, h_mat.col,
+        GlobalV::NLOCAL, GlobalV::NBANDS,
+        h_mat.p, s_mat.p, h_mat.desc,
+        eigen.data(), psi.get_pointer(), h_mat.desc
+    );
+
+    std::cout << "====== canon ===========" << std::endl;
+    for (int i = 0; i < GlobalV::NBANDS; ++i) {
+        std::cout << "eigen[" << i << "] = " << eigen[i] << std::endl;
+    }
+
+    std::cout << std::endl;
+
+
+
+
     this->pzhegvx_diag(h_mat.desc, h_mat.col, h_mat.row, h_mat.p, s_mat.p, eigen.data(), psi);
+
+    std::cout << "====== pzhegvx ===========" << std::endl;
+    for (int i = 0; i < GlobalV::NBANDS; ++i) {
+        std::cout << "eigen[" << i << "] = " << eigen[i] << std::endl;
+    }
+
+    std::cout << std::endl;
+
+    std::cout << "========================" << std::endl;
+
     const int inc = 1;
     BlasConnector::copy(GlobalV::NBANDS, eigen.data(), inc, eigenvalue_in, inc);
 }
@@ -318,6 +676,12 @@ namespace hsolver
              gap.data(),
              &info);
     //	GlobalV::ofs_running<<"M="<<M<<"\t"<<"NZ="<<NZ<<std::endl;
+    
+    // print ekb
+    //for (int i = 0; i < 5; ++i) {
+    //    std::cout << "ekb[" << i << "] = " << ekb[i] << std::endl;
+    //}
+    //std::cout << std::endl;
 
     if (info == 0) {
         return std::make_pair(info, std::vector<int>{});
@@ -443,5 +807,6 @@ namespace hsolver
         throw std::runtime_error(str_info_FILE);
     }
 }
+
 
 } // namespace hsolver

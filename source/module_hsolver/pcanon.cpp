@@ -1,79 +1,28 @@
+#include <complex>
 #include <cstdio>
 #include <type_traits>
 #include <vector>
 #include <cmath>
 #include <algorithm>
+#include <functional>
 #include <unistd.h>
 
 #include "module_base/scalapack_connector.h"
 #include "module_basis/module_ao/parallel_2d.h"
 
+template <typename T>
+void pdiagx(int n, int nbands, T* A, const int* desca, double* w, T* z, const int* descz) {
+    /**
+     * Standard eigenvalue decomposition returning the first `nbands` eigenpairs.
+     *
+     */
+    static_assert(std::is_same<T, double>::value ||
+                  std::is_same<T, std::complex<double>>::value,
+                  "T must be double or std::complex<double>");
 
-extern "C" {
+    bool is_cplx = std::is_same<T, std::complex<double>>::value;
 
-    void pdsyevx_(
-        const char* jobz, const char* range, const char* uplo,
-        const int* n,
-        double* a, const int* ia, const int* ja, const int* desca,
-        const double* vl, const double* vu, const int* il, const int* iu,
-        const double* abstol,
-        int* m, int* nz,
-        double* w,
-        double* orfac,
-        double* z, const int* iz, const int* jz, const int* descz,
-        double* work, const int* lwork, int* iwork, const int* liwork,
-        int* ifail, int* icluster, double* gap,
-        int* info
-    );
-
-    void pzheevx_(
-        const char* jobz, const char* range, const char* uplo,
-        const int* n,
-        std::complex<double>* a, const int* ia, const int* ja, const int* desca,
-        const double* vl, const double* vu, const int* il, const int* iu,
-        const double* abstol,
-        int* m, int* nz,
-        double* w,
-        double* orfac,
-        std::complex<double>* z, const int* iz, const int* jz, const int* descz,
-        std::complex<double>* work, const int* lwork, double* rwork, const int* lrwork, int* iwork, const int* liwork,
-        int* ifail, int* icluster, double* gap,
-        int* info
-    );
-
-    double pdlamch_(int* ictxt, const char* cmach);
-}
-
-// pdgemm & pzgemm have the same interface, so we unify them
-// and let overload resolution to choose the right one
-void pxgemm(
-		const char *transa, const char *transb,
-		const int *M, const int *N, const int *K,
-		const double *alpha,
-		const double *A, const int *IA, const int *JA, const int *DESCA,
-		const double *B, const int *IB, const int *JB, const int *DESCB,
-		const double *beta,
-		double *C, const int *IC, const int *JC, const int *DESCC)
-{
-    pdgemm_(transa, transb, M, N, K, alpha, A, IA, JA, DESCA, B, IB, JB, DESCB, beta, C, IC, JC, DESCC);
-}
-
-void pxgemm(
-		const char *transa, const char *transb,
-		const int *M, const int *N, const int *K,
-		const std::complex<double> *alpha,
-		const std::complex<double> *A, const int *IA, const int *JA, const int *DESCA,
-		const std::complex<double> *B, const int *IB, const int *JB, const int *DESCB,
-		const std::complex<double> *beta,
-		std::complex<double> *C, const int *IC, const int *JC, const int *DESCC)
-{
-    pzgemm_(transa, transb, M, N, K, alpha, A, IA, JA, DESCA, B, IB, JB, DESCB, beta, C, IC, JC, DESCC);
-}
-
-
-// NOTE pdsyevx and pzheevx have different interfaces, so we have to write two pdiagx
-void pdiagx(int n, int nbands, double* A, int* desca, double* w, double* z, int* descz) {
-    // diagonalization returning the first `nbands` eigenpairs
+    const int one_i = 1;
 
     // get number of procs involved in this diagonalization
     // relevant for the output parameters iclustr and gap
@@ -90,8 +39,9 @@ void pdiagx(int n, int nbands, double* A, int* desca, double* w, double* z, int*
     double orfac = -1.0;
 
     // work space
-    int lwork = -1, liwork = -1;
-    std::vector<double> work(3);
+    int lwork = -1, liwork = -1, lrwork = -1;
+    std::vector<T> work(3);
+    std::vector<double> rwork(3); // used in complex case only
     std::vector<int> iwork(1);
 
     // output informational parameters
@@ -100,123 +50,68 @@ void pdiagx(int n, int nbands, double* A, int* desca, double* w, double* z, int*
     std::vector<double> gap(nprocs);
     int info = 0;
 
-    const int one = 1;
+    std::function<void()> eigen;
+    if (is_cplx) {
+        eigen = [&]() {
+            pzheevx_(
+                "V", &range, "U",
+                &n,
+                reinterpret_cast<std::complex<double>*>(A), &one_i, &one_i, desca,
+                &vl, &vu, &one_i, &nbands,
+                &abstol,
+                &m, &nz,
+                w,
+                &orfac,
+                reinterpret_cast<std::complex<double>*>(z), &one_i, &one_i, descz,
+                reinterpret_cast<std::complex<double>*>(work.data()), &lwork,
+                rwork.data(), &lrwork, iwork.data(), &liwork,
+                ifail.data(), iclustr.data(), gap.data(),
+                &info
+            );
+        };
+    } else {
+        eigen = [&]() {
+            pdsyevx_(
+                "V", &range, "U",
+                &n,
+                reinterpret_cast<double*>(A), &one_i, &one_i, desca,
+                &vl, &vu, &one_i, &nbands,
+                &abstol,
+                &m, &nz,
+                w,
+                &orfac,
+                reinterpret_cast<double*>(z), &one_i, &one_i, descz,
+                reinterpret_cast<double*>(work.data()), &lwork, iwork.data(), &liwork,
+                ifail.data(), iclustr.data(), gap.data(),
+                &info
+            );
+        };
+    }
 
-    // work space query & allocation
-    pdsyevx_(
-        "V", &range, "U",
-        &n,
-        A, &one, &one, desca,
-        &vl, &vu, &one, &nbands,
-        &abstol,
-        &m, &nz,
-        w,
-        &orfac,
-        z, &one, &one, descz,
-        work.data(), &lwork, iwork.data(), &liwork,
-        ifail.data(), iclustr.data(), gap.data(),
-        &info
-    );
+    // the first call is a work space query
+    eigen();
 
-    lwork = work[0];
-    work.resize(std::max(lwork, 3), 0);
+    lwork = std::real(work[0]);
+    work.resize(std::max(lwork, 3));
     liwork = iwork[0];
-    iwork.resize(liwork, 0);
+    iwork.resize(liwork);
+    if (is_cplx) {
+        lrwork = rwork[0];
+        rwork.resize(std::max(lrwork, 3));
+    }
 
     // actual diagonalization
-    pdsyevx_(
-        "V", &range, "U",
-        &n, A, &one, &one, desca,
-        &vl, &vu, &one, &nbands,
-        &abstol,
-        &m, &nz,
-        w,
-        &orfac,
-        z, &one, &one, descz,
-        work.data(), &lwork, iwork.data(), &liwork,
-        ifail.data(), iclustr.data(), gap.data(),
-        &info
-    );
+    eigen();
 }
 
-
-void pdiagx(int n, int nbands, std::complex<double>* A, int* desca, double* w, std::complex<double>* z, int* descz) {
-    // diagonalization returning the first `nbands` eigenpairs
-
-    // get number of procs involved in this diagonalization
-    // relevant for the output parameters iclustr and gap
-    int blacs_ctxt = desca[1];
-    int nprow, npcol, myrow, mycol, nprocs;
-    Cblacs_gridinfo(blacs_ctxt, &nprow, &npcol, &myrow, &mycol);
-    nprocs = nprow * npcol;
-
-    // input parameters
-    char range = (nbands == n) ? 'A' : 'I';
-    double vl = 0.0, vu = 1.0;
-    double abstol = pdlamch_(&blacs_ctxt, "U");
-    int m = 0, nz = 0;
-    double orfac = -1.0;
-
-    // work space
-    int lwork = -1, lrwork = -1, liwork = -1;
-    std::vector<std::complex<double>> work(1);
-    std::vector<double> rwork(3);
-    std::vector<int> iwork(1);
-
-    // output informational parameters
-    std::vector<int> ifail(n);
-    std::vector<int> iclustr(2 * nprocs);
-    std::vector<double> gap(nprocs);
-    int info = 0;
-
-    const int one = 1;
-
-    // work space query & allocation
-    pzheevx_(
-        "V", &range, "U",
-        &n,
-        A, &one, &one, desca,
-        &vl, &vu, &one, &nbands,
-        &abstol,
-        &m, &nz,
-        w,
-        &orfac,
-        z, &one, &one, descz,
-        work.data(), &lwork, rwork.data(), &lrwork, iwork.data(), &liwork,
-        ifail.data(), iclustr.data(), gap.data(),
-        &info
-    );
-
-    lwork = work[0].real();
-    work.resize(lwork, 0);
-    lrwork = rwork[0];
-    rwork.resize(std::max(lrwork, 3), 0);
-    liwork = iwork[0];
-    iwork.resize(liwork, 0);
-
-    // actual diagonalization
-    pzheevx_(
-        "V", &range, "U",
-        &n, A, &one, &one, desca,
-        &vl, &vu, &one, &nbands,
-        &abstol,
-        &m, &nz,
-        w,
-        &orfac,
-        z, &one, &one, descz,
-        work.data(), &lwork, rwork.data(), &lrwork, iwork.data(), &liwork,
-        ifail.data(), iclustr.data(), gap.data(),
-        &info
-    );
-}
 
 template <typename T>
 int canon_diag(
     int nrow_loc, int ncol_loc,
     int n_glb, int nbands,
-    T* H, T* S, int* desc_HS,
-    double* E, T* C, int* desc_C,
-    double thr = 1e-6
+    T* H, T* S, const int* desc_HS,
+    double* E, T* C, const int* desc_C,
+    double thr = 1e-5
 ) {
     /**
      * Solve a generalized eigenvalue problem H*C = S*C*E with canonical orthogonalization.
@@ -233,7 +128,8 @@ int canon_diag(
      *
      */
 
-    static_assert(std::is_same<T, double>::value || std::is_same<T, std::complex<double>>::value,
+    static_assert(std::is_same<T, double>::value ||
+                  std::is_same<T, std::complex<double>>::value,
                   "T must be double or std::complex<double>");
 
     bool is_cplx = std::is_same<T, std::complex<double>>::value;
@@ -247,12 +143,13 @@ int canon_diag(
     // size of the square block in block-cyclic distribution
     int nb = desc_HS[4];
 
-    //====== allocate memory for most temporary variables ======
+    //====== allocate memory for temporary arrays ======
     // S_copy, H_sub                            <-- at most nelem_loc
     // vec_S (eigenvectors of S, including X)   <-- nelem_loc
     // X^H * H, V_sub (eigenvectors of H_sub)   <-- at most nelem_loc
     // val_S (eigenvalues of S)                 <-- n_glb, always real
-    size_t buf_size = 3 * nelem_loc + n_glb * sizeof(double) / sizeof(T) + (is_cplx && (n_glb % 2));
+    size_t buf_size = 3 * nelem_loc + n_glb * sizeof(double) / sizeof(T)
+                    + (is_cplx && (n_glb % 2));
     std::vector<T> buffer(buf_size);
 
     // a copy of S (prevent pdsyevx from destroying the input S)
@@ -282,6 +179,7 @@ int canon_diag(
     //====== 1. eigen-decomposition of S ======
     std::copy(S, S + nelem_loc, S_copy);
     pdiagx(n_glb, n_glb, S_copy, desc_HS, val_S, vec_S, desc_HS);
+
 
     //====== 2. find the number of tiny eigenvalues below thr ======
     // number of tiny eigenvalues of S below thr
@@ -320,25 +218,25 @@ int canon_diag(
     int icol = 1 + n_tiny; // the first column of U to be used (fortran convention)
 
     // X^H * H
-    pxgemm(
-        is_cplx ? "C":"T", "N",
-        &dim, &n_glb, &n_glb,
-        &one_f,
-        vec_S, &one_i, &icol, desc_HS,
-        H, &one_i, &one_i, desc_HS,
-        &zero_f,
-        XhH, &one_i, &one_i, p2d_XhH.desc
+    ScalapackConnector::gemm(
+        is_cplx ? 'C':'T', 'N',
+        dim, n_glb, n_glb,
+        one_f,
+        vec_S, one_i, icol, desc_HS,
+        H, one_i, one_i, desc_HS,
+        zero_f,
+        XhH, one_i, one_i, p2d_XhH.desc
     );
 
     // H_sub = X^H * H * X
-    pxgemm(
-        "N", "N",
-        &dim, &dim, &n_glb,
-        &one_f,
-        XhH, &one_i, &one_i, p2d_XhH.desc,
-        vec_S, &one_i, &icol, desc_HS,
-        &zero_f,
-        H_sub, &one_i, &one_i, p2d_sub.desc
+    ScalapackConnector::gemm(
+        'N', 'N',
+        dim, dim, n_glb,
+        one_f,
+        XhH, one_i, one_i, p2d_XhH.desc,
+        vec_S, one_i, icol, desc_HS,
+        zero_f,
+        H_sub, one_i, one_i, p2d_sub.desc
     );
 
     //======= 5. eigen-decomposition of H_sub ======
@@ -350,21 +248,295 @@ int canon_diag(
     // the eigenvectors of interest, but whether this is safe is not clear.
     pdiagx(dim, nbands, H_sub, p2d_sub.desc, E, C_sub, p2d_sub.desc);
 
+    // print ekb
+    //for (int i = 0; i < 5; ++i) {
+    //    std::cout << "E[" << i << "] = " << E[i] << std::endl;
+    //}
+    //std::cout << std::endl;
+
     //======= transform the eigenvectors back ======
     // C = X * C_sub
-    pxgemm(
-        "N", "N",
-        &n_glb, &nbands, &dim,
-        &one_f,
-        vec_S, &one_i, &icol, desc_HS,
-        C_sub, &one_i, &one_i, p2d_sub.desc,
-        &zero_f,
-        C, &one_i, &one_i, desc_C
+    ScalapackConnector::gemm(
+        'N', 'N',
+        n_glb, nbands, dim,
+        one_f,
+        vec_S, one_i, icol, desc_HS,
+        C_sub, one_i, one_i, p2d_sub.desc,
+        zero_f,
+        C, one_i, one_i, desc_C
     );
 
     return n_tiny;
 }
 
+//template <typename T>
+//void pdiagx(int n, int nbands, T* A, int* desca, double* w, T* z, int* descz) {
+//    /**
+//     * Standard eigenvalue decomposition returning the first `nbands` eigenpairs.
+//     *
+//     */
+//    static_assert(std::is_same<T, double>::value ||
+//                  std::is_same<T, std::complex<double>>::value,
+//                  "T must be double or std::complex<double>");
+//
+//    bool is_cplx = std::is_same<T, std::complex<double>>::value;
+//
+//    const int one_i = 1;
+//
+//    // get number of procs involved in this diagonalization
+//    // relevant for the output parameters iclustr and gap
+//    int blacs_ctxt = desca[1];
+//    int nprow, npcol, myrow, mycol, nprocs;
+//    Cblacs_gridinfo(blacs_ctxt, &nprow, &npcol, &myrow, &mycol);
+//    nprocs = nprow * npcol;
+//
+//    // input parameters
+//    char range = (nbands == n) ? 'A' : 'I';
+//    double vl = 0.0, vu = 1.0;
+//    double abstol = pdlamch_(&blacs_ctxt, "U");
+//    int m = 0, nz = 0;
+//    double orfac = -1.0;
+//
+//    // work space
+//    int lwork = -1, liwork = -1, lrwork = -1;
+//    std::vector<T> work(3);
+//    std::vector<double> rwork(3); // used in complex case only
+//    std::vector<int> iwork(1);
+//
+//    // output informational parameters
+//    std::vector<int> ifail(n);
+//    std::vector<int> iclustr(2 * nprocs);
+//    std::vector<double> gap(nprocs);
+//    int info = 0;
+//
+//    std::function<void()> eigen;
+//    if (is_cplx) {
+//        eigen = [&]() {
+//            pzheevx_(
+//                "V", &range, "U",
+//                &n,
+//                reinterpret_cast<std::complex<double>*>(A), &one_i, &one_i, desca,
+//                &vl, &vu, &one_i, &nbands,
+//                &abstol,
+//                &m, &nz,
+//                w,
+//                &orfac,
+//                reinterpret_cast<std::complex<double>*>(z), &one_i, &one_i, descz,
+//                reinterpret_cast<std::complex<double>*>(work.data()), &lwork,
+//                rwork.data(), &lrwork, iwork.data(), &liwork,
+//                ifail.data(), iclustr.data(), gap.data(),
+//                &info
+//            );
+//        };
+//    } else {
+//        eigen = [&]() {
+//            pdsyevx_(
+//                "V", &range, "U",
+//                &n,
+//                reinterpret_cast<double*>(A), &one_i, &one_i, desca,
+//                &vl, &vu, &one_i, &nbands,
+//                &abstol,
+//                &m, &nz,
+//                w,
+//                &orfac,
+//                reinterpret_cast<double*>(z), &one_i, &one_i, descz,
+//                reinterpret_cast<double*>(work.data()), &lwork, iwork.data(), &liwork,
+//                ifail.data(), iclustr.data(), gap.data(),
+//                &info
+//            );
+//        };
+//    }
+//
+//    // the first call is a work space query
+//    eigen();
+//
+//    lwork = std::real(work[0]);
+//    work.resize(std::max(lwork, 3));
+//    liwork = iwork[0];
+//    iwork.resize(liwork);
+//    if (is_cplx) {
+//        lrwork = rwork[0];
+//        rwork.resize(std::max(lrwork, 3));
+//    }
+//
+//    // actual diagonalization
+//    eigen();
+//}
+//
+//
+//template <typename T>
+//int canon_diag(
+//    int nrow_loc, int ncol_loc,
+//    int n_glb, int nbands,
+//    T* H, T* S, int* desc_HS,
+//    double* E, T* C, int* desc_C,
+//    double thr = 1e-6
+//) {
+//    /**
+//     * Solve a generalized eigenvalue problem H*C = S*C*E with canonical orthogonalization.
+//     *
+//     * Given a potentially singular generalized eigenvalue problem (i.e., the basis
+//     * are almost linearly dependent so S might has tiny eigenvalues), this function
+//     *
+//     * 1. diagonalizes S
+//     * 2. selects the subset of eigenvectors, denote X, corresponding to non-tiny eigenvalues
+//     * 3. rescales X column-wise by diag(1/sqrt(val_S))
+//     * 4. forms subspace Hamiltonian H_sub = X^H * H * X (^H denotes Hermitian conjugate)
+//     * 5. solves the eigenvalue problem H_sub * C_sub = C_sub * E
+//     * 6. gets the eigenvectors of the original problem C = X * C_sub
+//     *
+//     */
+//
+//    static_assert(std::is_same<T, double>::value ||
+//                  std::is_same<T, std::complex<double>>::value,
+//                  "T must be double or std::complex<double>");
+//
+//    bool is_cplx = std::is_same<T, std::complex<double>>::value;
+//
+//    // number of elements in the local matrix of H/S/vec_S
+//    size_t nelem_loc = static_cast<size_t>(nrow_loc) * ncol_loc;
+//
+//    // BLACS context
+//    int ctxt = desc_HS[1];
+//
+//    // size of the square block in block-cyclic distribution
+//    int nb = desc_HS[4];
+//
+//    //====== allocate memory for temporary arrays ======
+//    // S_copy, H_sub                            <-- at most nelem_loc
+//    // vec_S (eigenvectors of S, including X)   <-- nelem_loc
+//    // X^H * H, V_sub (eigenvectors of H_sub)   <-- at most nelem_loc
+//    // val_S (eigenvalues of S)                 <-- n_glb, always real
+//    size_t buf_size = 3 * nelem_loc + n_glb * sizeof(double) / sizeof(T) + (is_cplx && (n_glb % 2));
+//    std::vector<T> buffer(buf_size);
+//
+//    // a copy of S (prevent pdsyevx from destroying the input S)
+//    T* S_copy = buffer.data();
+//
+//    // H_sub = X^H * H * X; NOTE: H_sub and S_copy do not coexist
+//    T* H_sub = S_copy;
+//
+//    // eigenvectors of S (becomes X after rescaled by 1/sqrt(val_S))
+//    T* vec_S = H_sub + nelem_loc;
+//
+//    // X^H * H
+//    T* XhH = vec_S + nelem_loc;
+//
+//    // eigenvectors of H_sub; NOTE: C_sub and XhH do not coexist
+//    T* C_sub = XhH;
+//
+//    // eigenvalues of S
+//    double* val_S = reinterpret_cast<double*>(C_sub + nelem_loc);
+//
+//
+//    // block-cyclic distribution of H/S/vec_S
+//    Parallel_2D p2d_HS;
+//    p2d_HS.set(n_glb, n_glb, nb, ctxt);
+//
+//
+//    //====== 1. eigen-decomposition of S ======
+//    std::copy(S, S + nelem_loc, S_copy);
+//    pdiagx(n_glb, n_glb, S_copy, desc_HS, val_S, vec_S, desc_HS);
+//
+//    //====== 2. find the number of tiny eigenvalues below thr ======
+//    // number of tiny eigenvalues of S below thr
+//    int n_tiny = std::find_if(val_S, val_S + n_glb, [thr](double x) { return x > thr; }) - val_S;
+//
+//    // the "true dimension" of the eigenvalue problem (linear dependency removed)
+//    int dim = n_glb - n_tiny;
+//
+//    //======= 3. transformation matrix of canonical orthogonalization ======
+//    // rescale U column-wise by diag(1/sqrt(o)) (tiny eigenvalues are excluded)
+//    for (int col_glb = n_tiny; col_glb < n_glb; ++col_glb) {
+//        if (p2d_HS.global2local_col(col_glb) != -1) { // if the column is in the local matrix
+//            // we do an in-place scaling of vec_S
+//            int col_loc = p2d_HS.global2local_col(col_glb);
+//            double inv_sqrt = 1.0 / std::sqrt(val_S[col_glb]);
+//            for (int row_loc = 0; row_loc < nrow_loc; ++row_loc) {
+//                vec_S[row_loc + col_loc * nrow_loc] *= inv_sqrt;
+//            }
+//        }
+//    }
+//
+//    // from now on, the canonical transformation matrix X = vec_S[:, n_tiny:]
+//
+//    // block-cyclic distribution of H_sub/C_sub
+//    Parallel_2D p2d_sub;
+//    p2d_sub.set(dim, dim, nb, ctxt);
+//
+//    // block-cyclic distribution of X^H * H
+//    Parallel_2D p2d_XhH;
+//    p2d_XhH.set(dim, n_glb, nb, ctxt);
+//
+//    //======= 4. form H_sub = X^H * H * X ======
+//    const T one_f = 1.0;
+//    const T zero_f = 0.0;
+//    const int one_i = 1;
+//    int icol = 1 + n_tiny; // the first column of U to be used (fortran convention)
+//
+//    // X^H * H
+//    ScalapackConnector::gemm(
+//        is_cplx ? 'C':'T', 'N',
+//        dim, n_glb, n_glb,
+//        one_f,
+//        vec_S, one_i, icol, desc_HS,
+//        H, one_i, one_i, desc_HS,
+//        zero_f,
+//        XhH, one_i, one_i, p2d_XhH.desc
+//    );
+//
+//    // H_sub = X^H * H * X
+//    ScalapackConnector::gemm(
+//        'N', 'N',
+//        dim, dim, n_glb,
+//        one_f,
+//        XhH, one_i, one_i, p2d_XhH.desc,
+//        vec_S, one_i, icol, desc_HS,
+//        zero_f,
+//        H_sub, one_i, one_i, p2d_sub.desc
+//    );
+//
+//    //======= 5. eigen-decomposition of H_sub ======
+//    // NOTE: pdsyevx's documentation suggests that the array for holding
+//    // eigenvectors (C_sub) be square, even if only a selected range of
+//    // eigenpairs is requested. This is checked by its array descriptor.
+//    // It might be sufficient to pass a descriptor of a square-sized matrix
+//    // but allocate a smaller memory for C_sub that's just enough for holding
+//    // the eigenvectors of interest, but whether this is safe is not clear.
+//    pdiagx(dim, nbands, H_sub, p2d_sub.desc, E, C_sub, p2d_sub.desc);
+//
+//    //======= transform the eigenvectors back ======
+//    // C = X * C_sub
+//    ScalapackConnector::gemm(
+//        'N', 'N',
+//        n_glb, nbands, dim,
+//        one_f,
+//        vec_S, one_i, icol, desc_HS,
+//        C_sub, one_i, one_i, p2d_sub.desc,
+//        zero_f,
+//        C, one_i, one_i, desc_C
+//    );
+//
+//    return n_tiny;
+//}
+
+
+// explicit instantiation of canon_diag for double and std::complex<double>
+//template int canon_diag<double>(
+//    int nrow_loc, int ncol_loc,
+//    int n_glb, int nbands,
+//    double* H, double* S, int* desc_HS,
+//    double* E, double* C, int* desc_C,
+//    double thr
+//);
+//
+//template int canon_diag<std::complex<double>>(
+//    int nrow_loc, int ncol_loc,
+//    int n_glb, int nbands,
+//    std::complex<double>* H, std::complex<double>* S, int* desc_HS,
+//    double* E, std::complex<double>* C, int* desc_C,
+//    double thr
+//);
 
 int main() {
 
@@ -380,7 +552,7 @@ int main() {
     int rank = 10;
     int n = 12;
     int nbands = 5;
-    int nb = 2;
+    int nb = 1;
 
     std::vector<double> H;
     std::vector<double> S, Y;
