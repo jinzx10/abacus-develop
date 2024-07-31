@@ -9,7 +9,6 @@
 
 #include <cassert>
 #include <cstring>
-#include <numeric>
 
 #include "module_base/global_function.h"
 #include "module_base/global_variable.h"
@@ -21,319 +20,6 @@ typedef hamilt::MatrixBlock<std::complex<double>> matcd;
 
 namespace hsolver
 {
-
-void pdiagx_check_fatal(int info, const std::vector<int>& ifail, bool is_cplx);
-
-template <typename T>
-void pdiagx(int n_eig, const T* A_loc, const int* desca, double* w, T* z, const int* descz) {
-    /**
-     * Standard eigen-decomposition for the first `n_eig` eigenpairs.
-     *
-     */
-    static_assert(std::is_same<T, double>::value ||
-                  std::is_same<T, std::complex<double>>::value,
-                  "T must be double or std::complex<double>");
-
-    const bool is_cplx = std::is_same<T, std::complex<double>>::value;
-    const int one_i = 1;
-    const int n_glb = desca[2];
-
-    // some sanity checks
-    assert(desca[2] == desca[3]); // A must be globally square
-    assert(n_eig <= n_glb);
-
-    // process grid information
-    int ctxt = desca[1];
-    int nprow, npcol, myrow, mycol, nprocs;
-    Cblacs_gridinfo(ctxt, &nprow, &npcol, &myrow, &mycol);
-    nprocs = nprow * npcol;
-
-    // pdsyevx/pzheevx destroys the input matrix, but they do not guarantee
-    // a successful calculation even for valid input. Therefore, we make a
-    // copy of the input matrix in case we need to re-run the calculation.
-    // The input matrix `A` will remain intact throughout the function.
-    const int ncol_A_loc = numroc_(desca + 3, desca + 5, &mycol, desca + 7, &npcol);
-    const size_t nelem_A_loc = static_cast<size_t>(desca[8]) * ncol_A_loc;
-    std::vector<T> A_loc_copy(A_loc, A_loc + nelem_A_loc);
-
-
-    // input parameters
-    char range = (n_eig == n_glb) ? 'A' : 'I';
-    double vl = 0.0, vu = 1.0;
-    double abstol = 2.0 * pdlamch_(&ctxt, "S");
-    int m = 0, nz = 0;
-    double orfac = -1.0;
-
-    // work space
-    int lwork = -1, liwork = -1, lrwork = -1;
-    std::vector<T> work(3);
-    std::vector<double> rwork(3);
-    std::vector<int> iwork(1);
-
-    // output informational parameters
-    std::vector<int> ifail(n_glb);
-    std::vector<int> iclustr(2 * nprocs);
-    std::vector<double> gap(nprocs);
-    int info = 0;
-
-    std::function<void()> eigen;
-    if (is_cplx) {
-        eigen = [&]() {
-            pzheevx_(
-                "V", &range, "U",
-                &n_glb,
-                reinterpret_cast<std::complex<double>*>(A_loc_copy.data()),
-                &one_i, &one_i, desca,
-                &vl, &vu, &one_i, &n_eig,
-                &abstol,
-                &m, &nz,
-                w,
-                &orfac,
-                reinterpret_cast<std::complex<double>*>(z),
-                &one_i, &one_i, descz,
-                reinterpret_cast<std::complex<double>*>(work.data()), &lwork,
-                rwork.data(), &lrwork,
-                iwork.data(), &liwork,
-                ifail.data(), iclustr.data(), gap.data(),
-                &info
-            );
-        };
-    } else {
-        eigen = [&]() {
-            pdsyevx_(
-                "V", &range, "U",
-                &n_glb,
-                reinterpret_cast<double*>(A_loc_copy.data()),
-                &one_i, &one_i, desca,
-                &vl, &vu, &one_i, &n_eig,
-                &abstol,
-                &m, &nz,
-                w,
-                &orfac,
-                reinterpret_cast<double*>(z),
-                &one_i, &one_i, descz,
-                reinterpret_cast<double*>(work.data()), &lwork,
-                iwork.data(), &liwork,
-                ifail.data(), iclustr.data(), gap.data(),
-                &info
-            );
-        };
-    }
-
-    // the first call is a work space query
-    eigen();
-
-    // allocate workspace
-    lwork = std::real(work[0]);
-    work.resize(std::max(lwork, 3));
-    liwork = iwork[0];
-    iwork.resize(liwork);
-    if (is_cplx) {
-        lrwork = rwork[0];
-        rwork.resize(std::max(lrwork, 3));
-    }
-
-    // Ideally the eigen-decomposition will be successfully carried out
-    // by the next call. In case there is any fatal error, the function
-    // will throw an exception and abort the program.
-    //
-    // In some cases, calculations may finish with eigenvectors unorthogonalized
-    // due to insufficient workspace. In this case, we will increase the size of
-    // the workspace and re-run the calculation. This, however, should happen
-    // a few times at most and we choose to abort the program if the calculation
-    // fails after a few trials.
-    const int n_trial_max = 3;
-
-    for (int i_trial = 0; i_trial < n_trial_max; ++i_trial) {
-
-        // actual diagonalization
-        eigen();
-
-        if (info == 0) {
-            return;
-        }
-
-        // Abort if the error is fatal; pass without effect otherwise.
-        pdiagx_check_fatal(info, ifail, is_cplx);
-
-        // If the error is not fatal, prepare for the re-run
-        std::copy(A_loc, A_loc + nelem_A_loc, A_loc_copy.data());
-        
-        // The only non-fatal non-zero info is that eigenvectors are not
-        // orthogonalized, in which case we need to increase the size of the
-        // workspace based on iclustr and re-run the calculation.
-        int max_cluster_size = 1;
-        for (size_t i = 0; i < iclustr.size() / 2; ++i) {
-            max_cluster_size = std::max(iclustr[2 * i + 1] - iclustr[2 * i] + 1,
-                                        max_cluster_size);
-        }
-
-        if (is_cplx) {
-            lrwork += (max_cluster_size - 1) * n_glb;
-            rwork.resize(lrwork);
-        } else {
-            lwork += (max_cluster_size - 1) * n_glb;
-            work.resize(lwork);
-        }
-
-    } // end of while
-
-    throw std::runtime_error("pdiagx fails after " + std::to_string(n_trial_max) + " trials.\n");
-}
-
-
-template <typename T>
-int canon_diag(
-    int nrow_loc, int ncol_loc,
-    int n_glb, int n_eig,
-    T* H, T* S, const int* desc_HS,
-    double* E, T* C, const int* desc_C,
-    double thr = 1e-5
-) {
-    /**
-     * Solve a generalized eigenvalue problem H*C = S*C*E with canonical orthogonalization.
-     *
-     * Given a potentially singular generalized eigenvalue problem (i.e., the basis
-     * are almost linearly dependent so S might has tiny eigenvalues), this function
-     *
-     * 1. diagonalizes S
-     * 2. selects the subset of eigenvectors, denote X, corresponding to non-tiny eigenvalues
-     * 3. rescales X column-wise by diag(1/sqrt(val_S))
-     * 4. forms subspace Hamiltonian H_sub = X^H * H * X (^H denotes Hermitian conjugate)
-     * 5. solves the eigenvalue problem H_sub * C_sub = C_sub * E
-     * 6. gets the eigenvectors of the original problem C = X * C_sub
-     *
-     */
-
-    static_assert(std::is_same<T, double>::value ||
-                  std::is_same<T, std::complex<double>>::value,
-                  "T must be double or std::complex<double>");
-
-    bool is_cplx = std::is_same<T, std::complex<double>>::value;
-
-    // number of elements in the local matrix of H/S/vec_S
-    size_t nelem_loc = static_cast<size_t>(nrow_loc) * ncol_loc;
-
-    // BLACS context
-    int ctxt = desc_HS[1];
-
-    // size of the square block in block-cyclic distribution
-    int nb = desc_HS[4];
-
-    //====== allocate memory for temporary arrays ======
-    // vec_S (eigenvectors of S, including X)   <-- nelem_loc
-    // H_sub                                    <-- at most nelem_loc
-    // X^H * H, C_sub (eigenvectors of H_sub)   <-- at most nelem_loc
-    // val_S (eigenvalues of S)                 <-- n_glb, always real
-    size_t buf_size = 3 * nelem_loc + (n_glb + 1) * sizeof(double) / sizeof(T);
-    std::vector<T> buffer(buf_size);
-
-    // X^H * H * X;
-    T* vec_S = buffer.data();
-
-    // eigenvectors of S (becomes X after rescaled by 1/sqrt(val_S))
-    T* H_sub = vec_S + nelem_loc;
-
-    // X^H * H
-    T* XhH = H_sub + nelem_loc;
-
-    // eigenvectors of H_sub; NOTE: C_sub and XhH do not coexist
-    T* C_sub = XhH;
-
-    // eigenvalues of S
-    double* val_S = reinterpret_cast<double*>(C_sub + nelem_loc);
-
-
-    //====== 1. full eigen-decomposition of S ======
-    pdiagx(n_glb, S, desc_HS, val_S, vec_S, desc_HS);
-
-
-    //====== 2. find the number of tiny eigenvalues below thr ======
-    // number of tiny eigenvalues of S below thr
-    int n_tiny = std::find_if(val_S, val_S + n_glb, [thr](double x) { return x > thr; }) - val_S;
-
-    // the "true dimension" of the eigenvalue problem (linear dependency removed)
-    int dim = n_glb - n_tiny;
-
-    //======= 3. transformation matrix of canonical orthogonalization ======
-    // block-cyclic distribution of H/S/vec_S
-    Parallel_2D p2d_HS;
-    p2d_HS.set(n_glb, n_glb, nb, ctxt);
-
-    // rescale U column-wise by diag(1/sqrt(o)) (tiny eigenvalues are excluded)
-    for (int col_glb = n_tiny; col_glb < n_glb; ++col_glb) {
-        if (p2d_HS.global2local_col(col_glb) != -1) { // if the column is in the local matrix
-            // we do an in-place scaling of vec_S
-            int col_loc = p2d_HS.global2local_col(col_glb);
-            double inv_sqrt = 1.0 / std::sqrt(val_S[col_glb]);
-            for (int row_loc = 0; row_loc < nrow_loc; ++row_loc) {
-                vec_S[row_loc + col_loc * nrow_loc] *= inv_sqrt;
-            }
-        }
-    }
-
-    //====== canonical orthogonalization matrix X = vec_S[:, n_tiny:] ======
-
-    //======= 4. form H_sub = X^H * H * X ======
-    // block-cyclic distribution of H_sub/C_sub
-    Parallel_2D p2d_sub;
-    p2d_sub.set(dim, dim, nb, ctxt);
-
-    // block-cyclic distribution of X^H * H
-    Parallel_2D p2d_XhH;
-    p2d_XhH.set(dim, n_glb, nb, ctxt);
-
-    const T one_f = 1.0;
-    const T zero_f = 0.0;
-    const int one_i = 1;
-    int icol = 1 + n_tiny; // the first column of U to be used (fortran convention)
-
-    // X^H * H
-    ScalapackConnector::gemm(
-        is_cplx ? 'C':'T', 'N',
-        dim, n_glb, n_glb,
-        one_f,
-        vec_S, one_i, icol, desc_HS,
-        H, one_i, one_i, desc_HS,
-        zero_f,
-        XhH, one_i, one_i, p2d_XhH.desc
-    );
-
-    // H_sub = X^H * H * X
-    ScalapackConnector::gemm(
-        'N', 'N',
-        dim, dim, n_glb,
-        one_f,
-        XhH, one_i, one_i, p2d_XhH.desc,
-        vec_S, one_i, icol, desc_HS,
-        zero_f,
-        H_sub, one_i, one_i, p2d_sub.desc
-    );
-
-    //======= 5. eigen-decomposition of H_sub ======
-    // NOTE: the documentation of pdsyevx/pzheevx suggests that the array for
-    // holding eigenvectors (C_sub) be square, even if only a selected range of
-    // eigenpairs is requested. This is checked by its array descriptor.
-    // It might be sufficient to pass a descriptor of a square-sized matrix
-    // but allocate a smaller memory for C_sub which is just enough for holding
-    // the eigenvectors of interest, but whether this is safe is not clear.
-    pdiagx(n_eig, H_sub, p2d_sub.desc, E, C_sub, p2d_sub.desc);
-
-    //======= transform the eigenvectors back ======
-    // C = X * C_sub
-    ScalapackConnector::gemm(
-        'N', 'N',
-        n_glb, n_eig, dim,
-        one_f,
-        vec_S, one_i, icol, desc_HS,
-        C_sub, one_i, one_i, p2d_sub.desc,
-        zero_f,
-        C, one_i, one_i, desc_C
-    );
-
-    return n_tiny;
-}
-
     template<>
     void DiagoScalapack<double>::diag(hamilt::Hamilt<double>* phm_in, psi::Psi<double>& psi, Real* eigenvalue_in)
 {
@@ -345,10 +31,10 @@ int canon_diag(
 
     //this->pdsygvx_diag(h_mat.desc, h_mat.col, h_mat.row, h_mat.p, s_mat.p, eigen.data(), psi);
     canon_diag(
-        h_mat.row, h_mat.col,
-        GlobalV::NLOCAL, GlobalV::NBANDS,
+        GlobalV::NBANDS,
         h_mat.p, s_mat.p, h_mat.desc,
-        eigen.data(), psi.get_pointer(), h_mat.desc
+        eigen.data(),
+        psi.get_pointer(), h_mat.desc
     );
     
     const int inc = 1;
@@ -365,10 +51,10 @@ int canon_diag(
 
     //this->pzhegvx_diag(h_mat.desc, h_mat.col, h_mat.row, h_mat.p, s_mat.p, eigen.data(), psi);
     canon_diag(
-        h_mat.row, h_mat.col,
-        GlobalV::NLOCAL, GlobalV::NBANDS,
+        GlobalV::NBANDS,
         h_mat.p, s_mat.p, h_mat.desc,
-        eigen.data(), psi.get_pointer(), h_mat.desc
+        eigen.data(),
+        psi.get_pointer(), h_mat.desc
     );
 
     const int inc = 1;
@@ -772,60 +458,6 @@ int canon_diag(
     {
         throw std::runtime_error(str_info_FILE);
     }
-}
-
-void pdiagx_check_fatal(int info, const std::vector<int>& ifail, bool is_cplx) {
-
-    // This function will kill the program if any of the following happens:
-    //      info < 0: illegal input
-    //      info % 2 != 0: eigenvectors failed to converge
-    //      (info / 4) % 2 != 0: space limit (not supposed to happen)
-    //      (info / 8) % 2 != 0: fails to compute eigenvalues
-    //
-    // The following info triggers a re-run:
-    //      (info / 2) % 2 != 0: eigenvectors unorthogonalized
-    //
-    // If any fatal error occurs, the following function will throw an exception
-    // and abort the program; otherwise it passes without any effect.
-
-    std::string solver = is_cplx ? "pzheevx" : "pdsyevx";
-    std::string where = "file " __FILE__ ", in pdiagx(): " + solver + " failed: ";
-
-    if (info < 0) {
-        info = -info;
-        if (info > 100) {
-            throw std::runtime_error(where
-                    + "the " + std::to_string(info % 100) + "-th entry in the "
-                    + std::to_string(info / 100) + "-th argument is illegal.\n"
-            );
-        } else {
-            throw std::runtime_error(where
-                    + "the " + std::to_string(info) + "-th argument is illegal.\n"
-            );
-        }
-    } 
-
-    if (info % 2) {
-        std::string ifail_str = std::accumulate(ifail.begin(), ifail.end(), std::string("ifail = "), 
-            [](std::string str, int i) { return i != 0 ? str + std::to_string(i) + " " : str; });
-        throw std::runtime_error(where
-                + "one or more eigenvectors failed to converge:\n" + ifail_str + "\n");
-    }
-
-    if (info / 4 % 2) {
-        throw std::runtime_error(where + "space limit (should never occur)\n");
-    }
-
-    if (info / 8 % 2) {
-        throw std::runtime_error(where + "fails to compute eigenvalues");
-    }
-
-    // the only non-fatal error: eigenvectors unorthogonalized
-    if (info / 2 % 2) {
-        return;
-    }
-
-    throw std::runtime_error(where + "unknown info");
 }
 
 } // namespace hsolver

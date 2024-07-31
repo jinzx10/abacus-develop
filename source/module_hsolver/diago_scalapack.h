@@ -69,4 +69,6 @@ private:
 
 } // namespace hsolver
 
+#include "diago_scalapack.hpp"
+
 #endif
