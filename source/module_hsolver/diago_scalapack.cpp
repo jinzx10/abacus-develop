@@ -9,6 +9,7 @@
 
 #include <cassert>
 #include <cstring>
+#include <numeric>
 
 #include "module_base/global_function.h"
 #include "module_base/global_variable.h"
@@ -20,6 +21,8 @@ typedef hamilt::MatrixBlock<std::complex<double>> matcd;
 
 namespace hsolver
 {
+
+void pdiagx_check_fatal(int info, const std::vector<int>& ifail, bool is_cplx);
 
 template <typename T>
 void pdiagx(int n_eig, const T* A_loc, const int* desca, double* w, T* z, const int* descz) {
@@ -79,15 +82,18 @@ void pdiagx(int n_eig, const T* A_loc, const int* desca, double* w, T* z, const 
             pzheevx_(
                 "V", &range, "U",
                 &n_glb,
-                reinterpret_cast<std::complex<double>*>(A_loc_copy.data()), &one_i, &one_i, desca,
+                reinterpret_cast<std::complex<double>*>(A_loc_copy.data()),
+                &one_i, &one_i, desca,
                 &vl, &vu, &one_i, &n_eig,
                 &abstol,
                 &m, &nz,
                 w,
                 &orfac,
-                reinterpret_cast<std::complex<double>*>(z), &one_i, &one_i, descz,
+                reinterpret_cast<std::complex<double>*>(z),
+                &one_i, &one_i, descz,
                 reinterpret_cast<std::complex<double>*>(work.data()), &lwork,
-                rwork.data(), &lrwork, iwork.data(), &liwork,
+                rwork.data(), &lrwork,
+                iwork.data(), &liwork,
                 ifail.data(), iclustr.data(), gap.data(),
                 &info
             );
@@ -97,14 +103,17 @@ void pdiagx(int n_eig, const T* A_loc, const int* desca, double* w, T* z, const 
             pdsyevx_(
                 "V", &range, "U",
                 &n_glb,
-                reinterpret_cast<double*>(A_loc_copy.data()), &one_i, &one_i, desca,
+                reinterpret_cast<double*>(A_loc_copy.data()),
+                &one_i, &one_i, desca,
                 &vl, &vu, &one_i, &n_eig,
                 &abstol,
                 &m, &nz,
                 w,
                 &orfac,
-                reinterpret_cast<double*>(z), &one_i, &one_i, descz,
-                reinterpret_cast<double*>(work.data()), &lwork, iwork.data(), &liwork,
+                reinterpret_cast<double*>(z),
+                &one_i, &one_i, descz,
+                reinterpret_cast<double*>(work.data()), &lwork,
+                iwork.data(), &liwork,
                 ifail.data(), iclustr.data(), gap.data(),
                 &info
             );
@@ -124,9 +133,9 @@ void pdiagx(int n_eig, const T* A_loc, const int* desca, double* w, T* z, const 
         rwork.resize(std::max(lrwork, 3));
     }
 
-    // Ideally the calculation will be successfully carried out in the next call.
-    // In case there is any fatal error, the function will throw an exception
-    // and abort the program.
+    // Ideally the eigen-decomposition will be successfully carried out
+    // by the next call. In case there is any fatal error, the function
+    // will throw an exception and abort the program.
     //
     // In some cases, calculations may finish with eigenvectors unorthogonalized
     // due to insufficient workspace. In this case, we will increase the size of
@@ -144,73 +153,28 @@ void pdiagx(int n_eig, const T* A_loc, const int* desca, double* w, T* z, const 
             return;
         }
 
-        std::string solver = is_cplx ? "pzheevx" : "pdsyevx";
-        std::string location = "file " __FILE__ " line "  + std::to_string(__LINE__);
+        // Abort if the error is fatal; pass without effect otherwise.
+        pdiagx_check_fatal(info, ifail, is_cplx);
 
-        // The following info aborts the program:
-        //      info < 0: illegal input
-        //      info % 2 != 0: eigenvectors failed to converge
-        //      (info / 4) % 2 != 0: space limit (not supposed to happen in this function)
-        //      (info / 8) % 2 != 0: fails to compute eigenvalues
-        //
-        // The following info triggers a re-run:
-        //      (info / 2) % 2 != 0: eigenvectors unorthogonalized
-
-        if (info < 0) {
-            info = -info;
-            if (info > 100) {
-                throw std::runtime_error(location + " the " + std::to_string(info % 100)
-                        + "-th entry in the " + std::to_string(info / 100)
-                        + "-th argument of " + solver + "is illegal.\n");
-            } else {
-                throw std::runtime_error(location + " the " + std::to_string(info)
-                        + "-th argument of " + solver + "is illegal.\n");
-            }
-        } 
-
-        if (info % 2) {
-            std::string ifail_str = "ifail = ";
-            for (auto it = ifail.begin(); it != ifail.end(); ++it) {
-                if (*it != 0) {
-                    ifail_str += std::to_string(*it) + " ";
-                }
-            }
-            throw std::runtime_error(location + "one or more eigenvectors failed to converge:"
-                    + ifail_str);
+        // If the error is not fatal, prepare for the re-run
+        std::copy(A_loc, A_loc + nelem_A_loc, A_loc_copy.data());
+        
+        // The only non-fatal non-zero info is that eigenvectors are not
+        // orthogonalized, in which case we need to increase the size of the
+        // workspace based on iclustr and re-run the calculation.
+        int max_cluster_size = 1;
+        for (size_t i = 0; i < iclustr.size() / 2; ++i) {
+            max_cluster_size = std::max(iclustr[2 * i + 1] - iclustr[2 * i] + 1,
+                                        max_cluster_size);
         }
 
-        if (info / 4 % 2) {
-            throw std::runtime_error(location + " space limit (should never occur since the \
-                function is called with index-based range selection)");
+        if (is_cplx) {
+            lrwork += (max_cluster_size - 1) * n_glb;
+            rwork.resize(lrwork);
+        } else {
+            lwork += (max_cluster_size - 1) * n_glb;
+            work.resize(lwork);
         }
-
-        if (info / 8 % 2) {
-            throw std::runtime_error(location + " fails to compute eigenvalues");
-        }
-
-        if (info / 2 % 2) {
-
-            std::copy(A_loc, A_loc + nelem_A_loc, A_loc_copy.data());
-
-            // find the largest cluster
-            int cluster_size = 1; 
-            for (int i = 0; i < nprocs; ++i) {
-                cluster_size = std::max(cluster_size, iclustr[2 * i + 1] - iclustr[2 * i] + 1);
-            }
-
-            // increase the size of the workspace
-            if (is_cplx) {
-                lrwork += (cluster_size - 1) * n_glb;
-                rwork.resize(lrwork);
-            } else {
-                lwork += cluster_size * n_glb;
-                work.resize(lwork);
-            }
-
-            continue;
-        }
-
-        throw std::runtime_error(location + " unknown info");
 
     } // end of while
 
@@ -809,4 +773,59 @@ int canon_diag(
         throw std::runtime_error(str_info_FILE);
     }
 }
+
+void pdiagx_check_fatal(int info, const std::vector<int>& ifail, bool is_cplx) {
+
+    // This function will kill the program if any of the following happens:
+    //      info < 0: illegal input
+    //      info % 2 != 0: eigenvectors failed to converge
+    //      (info / 4) % 2 != 0: space limit (not supposed to happen)
+    //      (info / 8) % 2 != 0: fails to compute eigenvalues
+    //
+    // The following info triggers a re-run:
+    //      (info / 2) % 2 != 0: eigenvectors unorthogonalized
+    //
+    // If any fatal error occurs, the following function will throw an exception
+    // and abort the program; otherwise it passes without any effect.
+
+    std::string solver = is_cplx ? "pzheevx" : "pdsyevx";
+    std::string where = "file " __FILE__ ", in pdiagx(): " + solver + " failed: ";
+
+    if (info < 0) {
+        info = -info;
+        if (info > 100) {
+            throw std::runtime_error(where
+                    + "the " + std::to_string(info % 100) + "-th entry in the "
+                    + std::to_string(info / 100) + "-th argument is illegal.\n"
+            );
+        } else {
+            throw std::runtime_error(where
+                    + "the " + std::to_string(info) + "-th argument is illegal.\n"
+            );
+        }
+    } 
+
+    if (info % 2) {
+        std::string ifail_str = std::accumulate(ifail.begin(), ifail.end(), std::string("ifail = "), 
+            [](std::string str, int i) { return i != 0 ? str + std::to_string(i) + " " : str; });
+        throw std::runtime_error(where
+                + "one or more eigenvectors failed to converge:\n" + ifail_str + "\n");
+    }
+
+    if (info / 4 % 2) {
+        throw std::runtime_error(where + "space limit (should never occur)\n");
+    }
+
+    if (info / 8 % 2) {
+        throw std::runtime_error(where + "fails to compute eigenvalues");
+    }
+
+    // the only non-fatal error: eigenvectors unorthogonalized
+    if (info / 2 % 2) {
+        return;
+    }
+
+    throw std::runtime_error(where + "unknown info");
+}
+
 } // namespace hsolver
