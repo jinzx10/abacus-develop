@@ -180,3 +180,25 @@ if (ENABLE_MPI)
 endif()
 endif()
 endif()
+
+if (ENABLE_LCAO)
+  if (ENABLE_MPI)
+    # figure out the lib that provides BLACS
+    if(MKLROOT)
+      list(APPEND SCALAPACK_LIB MKL::MKL MKL::MKL_SCALAPACK)
+    else()
+      set(SCALAPACK_LIB ScaLAPACK::ScaLAPACK)
+    endif()
+
+    AddTest(
+      TARGET diago_scalapack_canon_test
+      LIBS MPI::MPI_CXX ${SCALAPACK_LIB}
+      SOURCES diago_scalapack_canon_test.cpp ../../module_basis/module_ao/parallel_2d.cpp
+    )
+    install(FILES diago_scalapack_canon_test.sh DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+    add_test(NAME diago_scalapack_canon_multitest
+      COMMAND ${BASH} diago_scalapack_canon_test.sh
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    )
+  endif()
+endif()
