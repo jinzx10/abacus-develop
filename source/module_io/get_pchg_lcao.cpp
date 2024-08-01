@@ -1,4 +1,4 @@
-#include "get_pchg.h"
+#include "get_pchg_lcao.h"
 
 #include "module_base/blas_connector.h"
 #include "module_base/global_function.h"
@@ -10,7 +10,7 @@
 #include "module_elecstate/module_dm/density_matrix.h"
 #include "module_hamilt_lcao/module_gint/gint.h"
 #include "module_hamilt_pw/hamilt_pwdft/global.h"
-#include "module_io/rho_io.h"
+#include "module_io/cube_io.h"
 
 IState_Charge::IState_Charge(psi::Psi<double>* psi_gamma_in, const Parallel_Orbitals* ParaV_in)
     : psi_gamma(psi_gamma_in), ParaV(ParaV_in)
@@ -120,7 +120,7 @@ void IState_Charge::begin(Gint_Gamma& gg,
                 ModuleBase::GlobalFunc::DCOPY(rho[is], rho_save[is].data(), rhopw_nrxx); // Copy data
             }
 
-            std::cout << " Writting cube files...";
+            std::cout << " Writing cube files...";
 
             for (int is = 0; is < nspin; ++is)
             {
@@ -131,7 +131,7 @@ void IState_Charge::begin(Gint_Gamma& gg,
                 // Use a const vector to store efermi for all spins, replace the original implementation:
                 // const double ef_tmp = pelec->eferm.get_efval(is);
                 double ef_spin = ef_all_spin[is];
-                ModuleIO::write_rho(
+                ModuleIO::write_cube(
 #ifdef __MPI
                     bigpw_bz,
                     bigpw_nbz,
@@ -257,7 +257,7 @@ void IState_Charge::begin(Gint_k& gk,
                         ModuleBase::GlobalFunc::DCOPY(rho[is], rho_save[is].data(), rhopw_nrxx); // Copy data
                     }
 
-                    std::cout << " Writting cube files...";
+                    std::cout << " Writing cube files...";
 
                     for (int is = 0; is < nspin; ++is)
                     {
@@ -266,7 +266,7 @@ void IState_Charge::begin(Gint_k& gk,
                         ssc << global_out_dir << "BAND" << ib + 1 << "_K" << ik + 1 << "_SPIN" << is + 1 << "_CHG.cube";
 
                         double ef_spin = ef_all_spin[is];
-                        ModuleIO::write_rho(
+                        ModuleIO::write_cube(
 #ifdef __MPI
                             bigpw_bz,
                             bigpw_nbz,
@@ -332,7 +332,7 @@ void IState_Charge::begin(Gint_k& gk,
                                ucell_in->symm);
                 }
 
-                std::cout << " Writting cube files...";
+                std::cout << " Writing cube files...";
 
                 for (int is = 0; is < nspin; ++is)
                 {
@@ -341,7 +341,7 @@ void IState_Charge::begin(Gint_k& gk,
                     ssc << global_out_dir << "BAND" << ib + 1 << "_SPIN" << is + 1 << "_CHG.cube";
 
                     double ef_spin = ef_all_spin[is];
-                    ModuleIO::write_rho(
+                    ModuleIO::write_cube(
 #ifdef __MPI
                         bigpw_bz,
                         bigpw_nbz,

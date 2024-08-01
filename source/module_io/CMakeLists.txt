@@ -20,14 +20,11 @@ list(APPEND objects
     binstream.cpp
     write_wfc_pw.cpp
     write_cube.cpp
-    write_rho.cpp
-    write_pot.cpp
+    write_elecstat_pot.cpp
     write_dipole.cpp
     td_current_io.cpp
     write_wfc_r.cpp
     output_log.cpp
-    output_rho.cpp
-    output_potential.cpp
     para_json.cpp
     parse_args.cpp
 )
@@ -49,8 +46,8 @@ if(ENABLE_LCAO)
       write_orb_info.cpp
       write_proj_band_lcao.cpp
       nscf_fermi_surf.cpp
-      get_pchg.cpp
-      get_wf.cpp
+      get_pchg_lcao.cpp
+      get_wf_lcao.cpp
       read_wfc_nao.cpp
       read_wfc_lcao.cpp
       write_wfc_nao.cpp

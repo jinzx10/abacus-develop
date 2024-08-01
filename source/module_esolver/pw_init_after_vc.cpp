@@ -37,7 +37,7 @@
 #include "module_io/rho_io.h"
 #include "module_io/to_wannier90_pw.h"
 #include "module_io/winput.h"
-#include "module_io/write_pot.h"
+#include "module_io/write_elecstat_pot.h"
 #include "module_io/write_wfc_r.h"
 #include "module_parameter/parameter.h"
 #ifdef USE_PAW
@@ -92,6 +92,7 @@ void ESolver_KS_PW<T, Device>::init_after_vc(const Input_para& inp, UnitCell& uc
                                        inp.erf_sigma);
 
         delete this->phsol;
+        this->init_psi = false;
         this->allocate_hsolver();
 
         delete this->pelec;
