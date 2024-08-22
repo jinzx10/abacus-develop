@@ -94,6 +94,10 @@ void pdiagx(int neig, const T* A, const int* desca, double* w, T* z, const int* 
     assert(desca[2] == desca[3]); // matrix A must be globally square
     assert(neig <= nglb);
 
+    assert((z == nullptr) == (descz == nullptr));
+
+
+
     // process grid information
     int ctxt = desca[1];
     int nprow, npcol, myrow, mycol, nprocs;
@@ -109,6 +113,7 @@ void pdiagx(int neig, const T* A, const int* desca, double* w, T* z, const int* 
     std::vector<T> A_copy(A, A + nelem_A);
 
     // input parameters
+    char jobz = (z == nullptr) ? 'N' : 'V';
     char range = (neig == nglb) ? 'A' : 'I';
     double vl = 0.0, vu = 1.0;
     double abstol = 2.0 * pdlamch_(&ctxt, "S");
@@ -131,7 +136,7 @@ void pdiagx(int neig, const T* A, const int* desca, double* w, T* z, const int* 
     if (is_cplx) {
         eigen = [&]() {
             pzheevx_(
-                "V", &range, "U",
+                &jobz, &range, "U",
                 &nglb,
                 reinterpret_cast<std::complex<double>*>(A_copy.data()),
                 &one_i, &one_i, desca,
@@ -152,7 +157,7 @@ void pdiagx(int neig, const T* A, const int* desca, double* w, T* z, const int* 
     } else {
         eigen = [&]() {
             pdsyevx_(
-                "V", &range, "U",
+                &jobz, &range, "U",
                 &nglb,
                 reinterpret_cast<double*>(A_copy.data()),
                 &one_i, &one_i, desca,
