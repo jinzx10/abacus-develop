@@ -8,25 +8,19 @@ namespace hsolver
 {
 
 template <typename T, typename Device = base_device::DEVICE_CPU>
-class HSolverLCAO : public HSolver<T, Device>
+class HSolverLCAO
 {
   public:
-    HSolverLCAO(const Parallel_Orbitals* ParaV_in)
-    {
-      this->classname = "HSolverPW"; 
-      this->ParaV = ParaV_in;
-      }
-    /*void init(
-        const Basis* pbas
-        //const Input &in,
-    ) override;
-    void update(//Input &in
-    ) override;*/
+    HSolverLCAO(const Parallel_Orbitals* ParaV_in, std::string method_in) : ParaV(ParaV_in), method(method_in) {};
 
-    void solve(hamilt::Hamilt<T>* pHamilt, psi::Psi<T>& psi, elecstate::ElecState* pes, const std::string method_in, const bool skip_charge) override;
+    void solve(hamilt::Hamilt<T>* pHamilt,
+               psi::Psi<T>& psi,
+               elecstate::ElecState* pes,
+               const std::string method_in,
+               const bool skip_charge);
 
     static std::vector<int> out_mat_hs; // mohan add 2010-09-02
-    static int out_mat_hsR; // LiuXh add 2019-07-16
+    static int out_mat_hsR;             // LiuXh add 2019-07-16
     static int out_mat_t;
     static int out_mat_dh;
 
@@ -37,11 +31,14 @@ class HSolverLCAO : public HSolver<T, Device>
 
     void parakSolve(hamilt::Hamilt<T>* pHamilt, psi::Psi<T>& psi, elecstate::ElecState* pes, int kpar);
 
-
     bool is_first_scf = true;
 
     using Real = typename GetTypeReal<T>::type;
     std::vector<Real> precondition_lcao;
+
+    DiagH<T, Device>* pdiagh = nullptr; // for single Hamiltonian matrix diagonal solver
+
+    std::string method = "none";
 };
 
 template <typename T, typename Device>
@@ -54,13 +51,13 @@ template <typename T, typename Device>
 int HSolverLCAO<T, Device>::out_mat_dh = 0;
 
 template <typename T>
-inline  T my_conj(T value)
+inline T my_conj(T value)
 {
     return value;
 }
 
 template <>
-inline  std::complex<double> my_conj(std::complex<double> value)
+inline std::complex<double> my_conj(std::complex<double> value)
 {
     return std::conj(value);
 }

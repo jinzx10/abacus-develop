@@ -217,8 +217,7 @@ void Input_Conv::Convert()
 
     GlobalV::device_flag = base_device::information::get_device_flag(PARAM.inp.device,
                                                                      PARAM.inp.ks_solver,
-                                                                     PARAM.inp.basis_type,
-                                                                     PARAM.globalv.gamma_only_local);
+                                                                     PARAM.inp.basis_type);
 
     if (GlobalV::device_flag == "gpu" && PARAM.inp.basis_type == "pw")
     {
@@ -300,14 +299,6 @@ void Input_Conv::Convert()
     //----------------------------------------------------------
     GlobalV::PW_DIAG_NMAX = PARAM.inp.pw_diag_nmax;
     GlobalV::PW_DIAG_NDIM = PARAM.inp.pw_diag_ndim;
-
-    hsolver::HSolverPW<std::complex<float>, base_device::DEVICE_CPU>::diago_full_acc = PARAM.inp.diago_full_acc;
-    hsolver::HSolverPW<std::complex<double>, base_device::DEVICE_CPU>::diago_full_acc = PARAM.inp.diago_full_acc;
-
-#if ((defined __CUDA) || (defined __ROCM))
-    hsolver::HSolverPW<std::complex<float>, base_device::DEVICE_GPU>::diago_full_acc = PARAM.inp.diago_full_acc;
-    hsolver::HSolverPW<std::complex<double>, base_device::DEVICE_GPU>::diago_full_acc = PARAM.inp.diago_full_acc;
-#endif
 
     GlobalV::PW_DIAG_THR = PARAM.inp.pw_diag_thr;
     GlobalV::NB2D = PARAM.inp.nb2d;
@@ -506,6 +497,8 @@ void Input_Conv::Convert()
         GlobalC::exx_info.info_ri.cauchy_threshold = PARAM.inp.exx_cauchy_threshold;
         GlobalC::exx_info.info_ri.C_grad_threshold = PARAM.inp.exx_c_grad_threshold;
         GlobalC::exx_info.info_ri.V_grad_threshold = PARAM.inp.exx_v_grad_threshold;
+        GlobalC::exx_info.info_ri.C_grad_R_threshold = PARAM.inp.exx_c_grad_r_threshold;
+        GlobalC::exx_info.info_ri.V_grad_R_threshold = PARAM.inp.exx_v_grad_r_threshold;
         GlobalC::exx_info.info_ri.cauchy_force_threshold = PARAM.inp.exx_cauchy_force_threshold;
         GlobalC::exx_info.info_ri.cauchy_stress_threshold = PARAM.inp.exx_cauchy_stress_threshold;
         GlobalC::exx_info.info_ri.ccp_rmesh_times = std::stod(PARAM.inp.exx_ccp_rmesh_times);

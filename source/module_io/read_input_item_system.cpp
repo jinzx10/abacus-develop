@@ -451,6 +451,14 @@ void ReadInput::item_system()
     {
         Input_Item item("diago_full_acc");
         item.annotation = "all the empty states are diagonalized";
+        /**
+        * @brief diago_full_acc
+        * If .TRUE. all the empty states are diagonalized at the same level of
+        * accuracy of the occupied ones. Otherwise the empty states are
+        * diagonalized using a larger threshold (this should not affect total
+        * energy, forces, and other ground-state properties).
+        *
+        */
         read_sync_bool(input.diago_full_acc);
         this->add_item(item);
     }
@@ -597,7 +605,14 @@ void ReadInput::item_system()
         Input_Item item("pseudo_dir");
         item.annotation = "the directory containing pseudo files";
         item.read_value = [](const Input_Item& item, Parameter& para) {
-            para.input.pseudo_dir = to_dir(strvalue);
+            if(item.get_size() == 0)
+            {
+                para.input.pseudo_dir = "";
+            }
+            else
+            {
+                para.input.pseudo_dir = to_dir(strvalue);
+            }
         };
         sync_string(input.pseudo_dir);
         this->add_item(item);
@@ -606,7 +621,14 @@ void ReadInput::item_system()
         Input_Item item("orbital_dir");
         item.annotation = "the directory containing orbital files";
         item.read_value = [](const Input_Item& item, Parameter& para) {
-            para.input.orbital_dir = to_dir(strvalue);
+            if(item.get_size() == 0)
+            {
+                para.input.orbital_dir = "";
+            }
+            else
+            {
+                para.input.orbital_dir = to_dir(strvalue);
+            }
         };
         sync_string(input.orbital_dir);
         this->add_item(item);
