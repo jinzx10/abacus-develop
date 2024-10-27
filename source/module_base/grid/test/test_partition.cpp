@@ -278,6 +278,63 @@ TEST_F(PartitionTest, Stratmann) {
 }
 
 
+TEST_F(PartitionTest, StratmannMod) {
+    dur = dur.zero();
+    for (const Param& param : test_params) {
+        double val = 0.0;
+        double val_ref = ref(param.a, param.n);
+
+        // tabulate || R[I] - R[J] ||
+        std::vector<double> dRR(dist_R_R(param.R));
+
+        // all centers are involved
+        size_t nR = param.R.size();
+        std::vector<int> iR(nR);
+        std::iota(iR.begin(), iR.end(), 0);
+
+        // radii of exclusive zone
+        std::vector<double> drR_thr(nR);
+        for (size_t I = 0; I < nR; ++I) {
+            double dRRmin = 1e100;
+            for (size_t J = 0; J < nR; ++J) {
+                if (J != I) {
+                    dRRmin = std::min(dRRmin, dRR[I*nR + J]);
+                }
+            }
+            drR_thr[I] = 0.5 * (1.0 - Grid::Partition::stratmann_a) * dRRmin;
+        }
+
+        // cutoff radii
+        std::vector<double> Rcut(nR, 10.0);
+
+        for (size_t I = 0; I < nR; ++I) { // for each center
+            for (size_t i = 0; i < w.size(); i++) {
+                Vec3 ri = Vec3{r[3*i], r[3*i+1], r[3*i+2]} + param.R[I];
+
+                // tabulate || r - R[J] ||
+                std::vector<double> drR(nR);
+                for (size_t J = 0; J < nR; ++J) {
+                    drR[J] = norm(ri - param.R[J]);
+                }
+
+                // partition weight for this grid point
+                start = iclock::now();
+                double w_part = Grid::Partition::w_stratmann_mod(
+                    drR.size(), drR.data(), dRR.data(), drR_thr.data(),
+                    Rcut.data(), iR.size(), iR.data(), I
+                );
+                dur += iclock::now() - start;
+
+                val += w_part * w[i] * func(ri, param.R, param.a, param.n);
+            }
+        }
+
+        EXPECT_NEAR(val, val_ref, tol);
+    }
+    printf("time elapsed = %8.3e seconds\n", dur.count());
+}
+
+
 int main(int argc, char** argv)
 {
 #ifdef __MPI
