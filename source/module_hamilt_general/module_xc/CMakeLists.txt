@@ -12,6 +12,12 @@ add_library(
     xc_funct_exch_gga.cpp
     xc_funct_corr_gga.cpp
     xc_funct_hcth.cpp
+    NCLibxc/NCLibxc.cpp
+    NCLibxc/NCLibxc.h
+    NCLibxc/interface_to_libxc.cpp
+    NCLibxc/interface_to_libxc.h
+    NCLibxc/LebedevGrid.cpp
+    xc_functional_NCLibxc_gga.cpp
 )
 
 if(ENABLE_COVERAGE)

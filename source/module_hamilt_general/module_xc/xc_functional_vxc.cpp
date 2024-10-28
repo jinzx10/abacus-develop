@@ -7,6 +7,16 @@
 #include "xc_functional.h"
 #include "module_base/parallel_reduce.h"
 #include "module_base/timer.h"
+#include "NCLibxc/NCLibxc.h"
+#include <tuple>
+#include <iostream>
+#include <vector>
+#include <array>
+#include <cmath>
+#include <complex>
+#include <iomanip>
+#include <xc.h>
+#include <stdexcept>
 
 // [etxc, vtxc, v] = XC_Functional::v_xc(...)
 std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc(
@@ -34,8 +44,12 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc(
     // the square of the e charge
     // in Rydeberg unit, so * 2.0.
     double e2 = 2.0;
+    std::complex<double> twoi(0.0, 2.0);
+    std::complex<double> two(2.0, 0.0);
 
     double vanishing_charge = 1.0e-10;
+
+    int mc=1; //it is designed for the case of non-collinear calculation and 0 indicates using the Kubler's locally collinear method and 1 indicates using the multi-colinear method
 
     if (GlobalV::NSPIN == 1 || ( GlobalV::NSPIN ==4 && !GlobalV::DOMAG && !GlobalV::DOMAG_Z))
     {
@@ -98,7 +112,7 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc(
             }
         }
     }
-    else if(GlobalV::NSPIN == 4)//noncollinear case added by zhengdy
+    else if(GlobalV::NSPIN == 4&&mc==0)//noncollinear case added by zhengdy(locally collinear method)
     {
 #ifdef _OPENMP
 #pragma omp parallel for reduction(+:etxc) reduction(+:vtxc)
@@ -154,13 +168,65 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc(
     }//end if
     // energy terms, local-density contributions
 
+    if(GlobalV::NSPIN == 4&&mc==1&&(func_type==0||func_type==1))// noncollinear case added by Xiaoyu Zhang, Peking University, 2024.10.02.  multicollinear method for lda Since NCLibxc needs libxc, this part codes will not be used.
+    {
+        NCLibxc::print_NCLibxc();
+#ifdef _OPENMP
+#pragma omp parallel for reduction(+:etxc) reduction(+:vtxc)
+#endif
+        for(int ir = 0;ir<nrxx; ir++)
+        {
+            if(!use_libxc){
+                std::cerr << "Error: Multi-collinear approach does not support running without Libxc." << std::endl;
+                std::exit(EXIT_FAILURE);
+            }
+            double exc = 0.0;
+            for(int ipol=0;ipol<4;ipol++){
+                v(ipol, ir) = 0;
+            }
+            NCLibxc nc_libxc;
+            std::vector<double> n = {chr->rho[0][ir] + chr->rho_core[ir]};
+            std::vector<double> mx = {chr->rho[1][ir]};
+            std::vector<double> my = {chr->rho[2][ir]};
+            std::vector<double> mz = {chr->rho[3][ir]};
+            double amag = sqrt( pow(chr->rho[1][ir],2) + pow(chr->rho[2][ir],2) + pow(chr->rho[3][ir],2) );
+            if (n[0] - amag <= 0.0) { //ensure the rhoup and rhodn to libxc are positive
+                continue;
+            }
+            for(const int &id : func_id){
+                auto [E_MC, V_MC] = NCLibxc::lda_mc(id, n, mx, my, mz);
+                exc = e2*E_MC[0];
+                v(0, ir) += std::real(e2*(V_MC[0][0][0]+V_MC[0][1][1])/two);
+                v(1, ir) += std::real(e2*(V_MC[0][0][1]+V_MC[0][1][0])/two);
+                v(2, ir) += std::real(e2*(V_MC[0][1][0]-V_MC[0][0][1])/twoi);
+                v(3, ir) += std::real(e2*(V_MC[0][0][0]-V_MC[0][1][1])/two);
+                etxc += exc * n[0];
+                vtxc += v(0, ir) * chr->rho[0][ir] + v(1, ir) * chr->rho[1][ir] + v(2, ir) * chr->rho[2][ir] + v(3, ir) * chr->rho[3][ir];
+            }
+        }
+    }
+   
+
     // add gradient corrections (if any)
     // mohan modify 2009-12-15
 
     // the dummy variable dum contains gradient correction to stress
     // which is not used here
     std::vector<double> dum;
-    gradcorr(etxc, vtxc, v, chr, chr->rhopw, ucell, dum);
+    if(GlobalV::NSPIN == 4&&mc==0)
+    {
+        gradcorr(etxc, vtxc, v, chr, chr->rhopw, ucell, dum);
+    }
+    if(GlobalV::NSPIN == 4&&mc==1){
+        if(func_type == 2 || func_type == 3) {
+            NCLibxc::print_NCLibxc();
+        }
+        if(func_type == 4 || func_type == 5) {
+            std::cerr << "Error: Multi-collinear approach hasn't support hybrid functioanl yet" << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+    }
+    
 
     // parallel code : collect vtxc,etxc
     // mohan add 2008-06-01
@@ -229,7 +295,7 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
             for( int ir=0; ir<nrxx; ++ir )
                 rho[ir*nspin+is] = chr->rho[is][ir] + 1.0/nspin*chr->rho_core[ir];
     }
-    else
+    else // GlobalV::NSPIN == 4 noncollinear case locally collinear approach 
     {
         amag.resize(nrxx);
         #ifdef _OPENMP
@@ -345,7 +411,7 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
                     +" unfinished in "+std::string(__FILE__)+" line "+std::to_string(__LINE__));
                 break;
         }
-
+////////////////////////////////////////////////////////////////exchange and correlation energy and potential are calculated here. return the results to etxc, vtxc, v
         #ifdef _OPENMP
         #pragma omp parallel for collapse(2) reduction(+:etxc) schedule(static, 256)
         #endif
@@ -365,7 +431,7 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
                 vtxc += v_tmp * rho[ir*nspin+is];
             }
         }
-
+//////////////////////////////////////////////////////////////// the above is for all functionals and below adds vrho and so on for GGA...
         if(func.info->family == XC_FAMILY_GGA || func.info->family == XC_FAMILY_HYB_GGA)
         {
             std::vector<std::vector<ModuleBase::Vector3<double>>> h( nspin,
@@ -450,7 +516,89 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
                 }
             }
         }
+        int mc=1;//it is designed for the case of non-collinear calculation and 0 indicates using the Kubler's locally collinear method and 1 indicates using the multi-colinear method
+        if(mc==1)//  added by Xiaoyu Zhang, Peking University, 2024.10.09.  multicollinear method 
+        {
+            etxc=0;
+            vtxc=0;
+            std::complex<double> twoi(0.0, 2.0);
+            std::complex<double> two(2.0, 0.0);
+            double e2=2.0;
 
+            NCLibxc::print_NCLibxc();
+            if(!is_gga){//LDA 
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static, 1024) reduction(+:etxc) reduction(+:vtxc)
+#endif
+                for(int ir = 0;ir<nrxx; ++ir){
+                    double exc = 0.0;
+                    for(int ipol=0;ipol<4;++ipol){
+                        v_nspin4(ipol, ir) = 0;
+                    }
+                    std::vector<double> n = {chr->rho[0][ir] + chr->rho_core[ir]};
+                    std::vector<double> mx = {chr->rho[1][ir]};
+                    std::vector<double> my = {chr->rho[2][ir]};
+                    std::vector<double> mz = {chr->rho[3][ir]};
+                    double amag = sqrt( pow(chr->rho[1][ir],2) + pow(chr->rho[2][ir],2) + pow(chr->rho[3][ir],2) );
+                     if (n[0] - amag <= 0.0) { //ensure the rhoup and rhodn to libxc are positive
+                        continue;
+                    }
+                   for(const int &id : func_id){
+                        auto [E_MC, V_MC] = NCLibxc::lda_mc(id, n, mx, my, mz);
+                        exc = e2*E_MC[0];
+                        v_nspin4(0, ir) += std::real(e2*(V_MC[0][0][0]+V_MC[0][1][1])/two);
+                        v_nspin4(1, ir) += std::real(e2*(V_MC[0][0][1]+V_MC[0][1][0])/two);
+                        v_nspin4(2, ir) += std::real(e2*(V_MC[0][1][0]-V_MC[0][0][1])/twoi);
+                        v_nspin4(3, ir) += std::real(e2*(V_MC[0][0][0]-V_MC[0][1][1])/two);
+                        etxc += exc * n[0];
+                        vtxc += v_nspin4(0, ir) *  chr->rho[0][ir] + v_nspin4(1, ir) * mx[0] + v_nspin4(2, ir) * my[0] + v_nspin4(3, ir) * mz[0];// vtxc is used the calculation of the total energy(Ts more specifically), because abacus doesn't directly programme the kinetic operator and instead uses the sum of occupied orbital energy
+                        // the reason why i use chr->rho here is not clear. It is based on the implementation in v_xc.
+
+                    }
+                }   
+            }
+            else{//gga
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static, 1024) reduction(+:etxc) reduction(+:vtxc)
+#endif
+                for(int ir = 0;ir<nrxx; ++ir){
+                    double exc = 0.0;
+                    for(int ipol=0;ipol<4;++ipol){
+                        v_nspin4(ipol, ir) = 0;
+                    }
+                    std::vector<double> n = {chr->rho[0][ir] + chr->rho_core[ir]};
+                    std::vector<double> mx = {chr->rho[1][ir]};
+                    std::vector<double> my = {chr->rho[2][ir]};
+                    std::vector<double> mz = {chr->rho[3][ir]};
+                    double amag = sqrt( pow(chr->rho[1][ir],2) + pow(chr->rho[2][ir],2) + pow(chr->rho[3][ir],2) );
+                     if (n[0] - amag <= 0.0) { //ensure the rhoup and rhodn to libxc are positive
+                        continue;
+                    }
+                   for(const int &id : func_id){
+                        auto [E_MC, V_MC] = XC_Functional::gga_mc(id, n, mx, my, mz,chr,tpiba);
+                        exc = e2*E_MC[0];
+                        v_nspin4(0, ir) += std::real(e2*(V_MC[0][0][0]+V_MC[0][1][1])/two);
+                        v_nspin4(1, ir) += std::real(e2*(V_MC[0][0][1]+V_MC[0][1][0])/two);
+                        v_nspin4(2, ir) += std::real(e2*(V_MC[0][1][0]-V_MC[0][0][1])/twoi);
+                        v_nspin4(3, ir) += std::real(e2*(V_MC[0][0][0]-V_MC[0][1][1])/two);
+                        etxc += exc * n[0];
+                        vtxc += v_nspin4(0, ir) *  chr->rho[0][ir] + v_nspin4(1, ir) * mx[0] + v_nspin4(2, ir) * my[0] + v_nspin4(3, ir) * mz[0];// vtxc is used the calculation of the total energy(Ts more specifically), because abacus doesn't directly programme the kinetic operator and instead uses the sum of occupied orbital energy
+                        // the reason why i use chr->rho here is not clear. It is based on the implementation in v_xc.
+
+                    }
+                }                   
+
+            }
+
+            #ifdef __MPI
+            Parallel_Reduce::reduce_pool(etxc);
+            Parallel_Reduce::reduce_pool(vtxc);
+            #endif
+
+            etxc *= omega / chr->rhopw->nxyz;
+            vtxc *= omega / chr->rhopw->nxyz;
+            
+        }
         ModuleBase::timer::tick("XC_Functional","v_xc_libxc");
         return std::make_tuple( etxc, vtxc, std::move(v_nspin4) );
     } // end if(4==GlobalV::NSPIN)
@@ -459,6 +607,7 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
         throw std::domain_error("GlobalV::NSPIN ="+std::to_string(GlobalV::NSPIN)
             +" unfinished in "+std::string(__FILE__)+" line "+std::to_string(__LINE__));
     }
+    
 }
 
 //the interface to libxc xc_mgga_exc_vxc(xc_func,n,rho,grho,laplrho,tau,e,v1,v2,v3,v4)

@@ -269,6 +269,8 @@ void XC_Functional::set_xc_type_libxc(std::string xc_func_in)
 }
 #endif
 
+
+
 #ifdef USE_LIBXC
 std::vector<xc_func_type> XC_Functional::init_func(const int xc_polarized)
 {

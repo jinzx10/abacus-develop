@@ -20,6 +20,9 @@
 #include "module_elecstate/module_charge/charge.h"
 #include "module_cell/unitcell.h"
 
+// 定义 2x2 复数矩阵类型
+using Matrix2x2 = std::array<std::array<std::complex<double>, 2>, 2>;
+
 class XC_Functional
 {
 	public:
@@ -91,6 +94,7 @@ class XC_Functional
 	static std::vector<xc_func_type> init_func(const int xc_polarized);
 	static void finish_func(std::vector<xc_func_type> &funcs);	
 #endif
+
 
 	private:
 
@@ -359,6 +363,19 @@ class XC_Functional
 	static void hcth(const double rho, const double grho, double &sx, double &v1x, double &v2x);
 	static void pwcorr(const double r, const double c[], double &g, double &dg);
 
+//-------------------
+// xc_functional_NCLibxc_gga.cpp
+//-------------------
+// This file is for implementing multi-collinear appraoch for GGA functionals.
+    static void postlibxc_gga(int xc_id, const std::vector<double>& rho_up, const std::vector<double>& rho_down, 
+					std::vector<double>& e, std::vector<double>& v1, std::vector<double>& v2, 
+					std::vector<double>& f1, std::vector<double>& f2, std::vector<double>& f3,const Charge* const chr,const double tpiba);
+	static std::pair<std::vector<double>, std::vector<Matrix2x2>> gga_mc(int xc_id, const std::vector<double>& n, 
+                                                              const std::vector<double>& mx, const std::vector<double>& my, const std::vector<double>& mz,const Charge* const chr,const double tpiba);
+
 };
+// 声明 MakeAngularGrid 函数
+std::vector<std::array<double, 4>> MakeAngularGrid(int grid_level);
+
 
 #endif //XC_FUNCTION_H
