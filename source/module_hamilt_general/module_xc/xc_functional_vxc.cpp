@@ -258,6 +258,8 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
 
     double etxc = 0.0;
     double vtxc = 0.0;
+    double etxc_col = 0.0;
+    double vtxc_col = 0.0;
     ModuleBase::matrix v(nspin,nrxx);
 
     //----------------------------------------------------------
@@ -557,43 +559,78 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
                     }
                 }   
             }
-            else{//gga
+            else { // gga
+             // 初始化所有格点的数组
+             std::vector<double> n(nrxx);
+             std::vector<double> mx(nrxx);
+             std::vector<double> my(nrxx);
+             std::vector<double> mz(nrxx);
+             std::vector<double> amag(nrxx);
+
+            for (int ir = 0; ir < nrxx; ++ir) {
+                n[ir] = chr->rho[0][ir] + chr->rho_core[ir];
+                mx[ir] = chr->rho[1][ir];
+                my[ir] = chr->rho[2][ir];
+                mz[ir] = chr->rho[3][ir];
+                mx[ir] = 0;// need to be deleted when used
+                my[ir] = 0;// need to be deleted when used
+                amag[ir] = sqrt(pow(chr->rho[1][ir], 2) + pow(chr->rho[2][ir], 2) + pow(chr->rho[3][ir], 2));
+            }
+
+            // 确保 rhoup 和 rhodn 为正
+           //for (int ir = 0; ir < nrxx; ++ir) {
+          //      if (n[ir] - amag[ir] <= 0.0) {
+             //       continue;
+        //        }
+        //    }
+
+            for (const int& id : func_id) {
+                auto [E_MC, V_MC] = XC_Functional::gga_mc(id, n, mx, my, mz, chr, tpiba);
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static, 1024) reduction(+:etxc) reduction(+:vtxc)
 #endif
-                for(int ir = 0;ir<nrxx; ++ir){
-                    double exc = 0.0;
-                    for(int ipol=0;ipol<4;++ipol){
-                        v_nspin4(ipol, ir) = 0;
-                    }
-                    std::vector<double> n = {chr->rho[0][ir] + chr->rho_core[ir]};
-                    std::vector<double> mx = {chr->rho[1][ir]};
-                    std::vector<double> my = {chr->rho[2][ir]};
-                    std::vector<double> mz = {chr->rho[3][ir]};
-                    double amag = sqrt( pow(chr->rho[1][ir],2) + pow(chr->rho[2][ir],2) + pow(chr->rho[3][ir],2) );
-                     if (n[0] - amag <= 0.0) { //ensure the rhoup and rhodn to libxc are positive
-                        continue;
-                    }
-                   for(const int &id : func_id){
-                        auto [E_MC, V_MC] = XC_Functional::gga_mc(id, n, mx, my, mz,chr,tpiba);
-                        exc = e2*E_MC[0];
-                        v_nspin4(0, ir) += std::real(e2*(V_MC[0][0][0]+V_MC[0][1][1])/two);
-                        v_nspin4(1, ir) += std::real(e2*(V_MC[0][0][1]+V_MC[0][1][0])/two);
-                        v_nspin4(2, ir) += std::real(e2*(V_MC[0][1][0]-V_MC[0][0][1])/twoi);
-                        v_nspin4(3, ir) += std::real(e2*(V_MC[0][0][0]-V_MC[0][1][1])/two);
-                        etxc += exc * n[0];
-                        vtxc += v_nspin4(0, ir) *  chr->rho[0][ir] + v_nspin4(1, ir) * mx[0] + v_nspin4(2, ir) * my[0] + v_nspin4(3, ir) * mz[0];// vtxc is used the calculation of the total energy(Ts more specifically), because abacus doesn't directly programme the kinetic operator and instead uses the sum of occupied orbital energy
-                        // the reason why i use chr->rho here is not clear. It is based on the implementation in v_xc.
-
-                    }
-                }                   
-
+                for (int ir = 0; ir < nrxx; ++ir) {
+                    double exc = e2 * E_MC[ir];
+                    v_nspin4(0, ir) += std::real(e2 * (V_MC[ir][0][0] + V_MC[ir][1][1]) / two);
+                    v_nspin4(1, ir) += std::real(e2 * (V_MC[ir][0][1] + V_MC[ir][1][0]) / two);
+                    v_nspin4(2, ir) += std::real(e2 * (V_MC[ir][1][0] - V_MC[ir][0][1]) / twoi);
+                    v_nspin4(3, ir) += std::real(e2 * (V_MC[ir][0][0] - V_MC[ir][1][1]) / two);
+                    etxc += exc * n[ir];
+                    vtxc += v_nspin4(0, ir) * chr->rho[0][ir] + v_nspin4(1, ir) * mx[ir] + v_nspin4(2, ir) * my[ir] + v_nspin4(3, ir) * mz[ir];
+                }
             }
 
+//////////////////////////////////// collinear test for gga
+            std::vector<double> e_col(nrxx, 0.0), v1_col(nrxx, 0.0), v2_col(nrxx, 0.0),f1_col(nrxx, 0.0),f2_col(nrxx, 0.0),f3_col(nrxx, 0.0),rho_up(nrxx, 0.0),rho_down(nrxx, 0.0);
+
+            for(int ir = 0;ir<nrxx;ir++){
+                rho_up[ir] = (n[ir]+mz[ir])/2.0;
+                rho_down[ir] = (n[ir]-mz[ir])/2.0;
+            }
+            for (const int& id : func_id) {
+                XC_Functional::postlibxc_gga(id, rho_up, rho_down, e_col, v1_col, v2_col, f1_col, f2_col, f3_col, chr, tpiba);
+#ifdef _OPENMP
+#pragma omp parallel for schedule(static, 1024) reduction(+:etxc_col) reduction(+:vtxc_col)
+#endif
+                for (int ir = 0; ir < nrxx; ++ir) {
+                    double exc = e2 * e_col[ir];
+                    etxc_col += exc * n[ir];
+                    vtxc_col += e2*(v1_col[ir] * rho_up[ir] + v2_col[ir] * rho_down[ir]);
+                }
+            }
+////////////////////////////////////////
+
+        }
             #ifdef __MPI
             Parallel_Reduce::reduce_pool(etxc);
             Parallel_Reduce::reduce_pool(vtxc);
+            Parallel_Reduce::reduce_pool(etxc_col);//for test
+            Parallel_Reduce::reduce_pool(vtxc_col); //for test
             #endif
+            std::cout << "etxc = " << etxc << std::endl;//for test
+            std::cout << "vtxc = " << vtxc << std::endl;//for test
+            std::cout << "etxc_col = " << etxc_col << std::endl;//for test
+            std::cout << "vtxc_col = " << vtxc_col << std::endl;//for test
 
             etxc *= omega / chr->rhopw->nxyz;
             vtxc *= omega / chr->rhopw->nxyz;
