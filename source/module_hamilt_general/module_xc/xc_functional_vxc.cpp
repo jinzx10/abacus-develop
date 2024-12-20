@@ -242,9 +242,14 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
         for( int ir=0; ir<nrxx; ++ir )
         {
             const double arhox = std::abs( chr->rho[0][ir] + chr->rho_core[ir] );
+
+            //NOTE: mag and rho might be mixed differently during charge mixing,
+            //thereby causing the magnitude of mag to exceed rho. To prevent
+            //numerical instability, we clip the magnitude of mag to be less than rho.
+
             amag[ir] = std::sqrt( std::pow(chr->rho[1][ir],2) + std::pow(chr->rho[2][ir],2) + std::pow(chr->rho[3][ir],2) );
-            //const double amag_clip = (amag[ir]<arhox) ? amag[ir] : arhox;
-            const double amag_clip = amag[ir];
+            const double amag_clip = (amag[ir]<arhox) ? amag[ir] : arhox;
+
             rho[ir*nspin+0] = (arhox + amag_clip) / 2.0; // n_{+}
             rho[ir*nspin+1] = (arhox - amag_clip) / 2.0; // n_{-}
         }        
@@ -266,6 +271,7 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
         // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
         if (GlobalV::NSPIN == 4 && PARAM.inp.gga_grad == 2)
         {
+            std::cout << "gga_grad = 2" << std::endl;
             // compute mag_part = mag_i / |mag|
             std::vector<double> mag_part(3 * nrxx, 0.0);
             for (int ir = 0; ir < nrxx; ir++)
@@ -280,7 +286,8 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
             }
 
             // compute \nabla rho' = \nabla rho_core + \nabla rho
-            std::complex<double>* rhogsum1 = new std::complex<double>[chr->rhopw->npw];
+            //std::complex<double>* rhogsum1 = new std::complex<double>[chr->rhopw->npw];
+            std::vector<std::complex<double>> rhogsum1(chr->rhopw->npw);
             const double fac0 = GlobalV::NSPIN == 2 ? 0.5 : 1.0;
             for (int ig = 0; ig < chr->rhopw->npw; ig++)
             {
@@ -288,7 +295,7 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
             }
 
             ModuleBase::Vector3<double>* gdr1 = new ModuleBase::Vector3<double>[nrxx];
-            XC_Functional::grad_rho(rhogsum1, gdr1, chr->rhopw, tpiba);
+            XC_Functional::grad_rho(rhogsum1.data(), gdr1, chr->rhopw, tpiba);
 
             // for non-collinear case
             // rho' has been calculated in rhotmp1, rhog' has been calculated in rhogsum1, \nabla rho' has been calculated
@@ -323,10 +330,11 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
             delete[] tmp_recip;
             delete[] gdr_mag;
             delete[] gdr1;
-            delete[] rhogsum1;
+            //delete[] rhogsum1;
         }
         else
         {
+            std::cout << "gga_grad = 1" << std::endl;
             //<<<<<<<<<<<<<<<<< this block is the original algorithm
             for( int is=0; is!=nspin; ++is )
             {
@@ -442,9 +450,14 @@ std::tuple<double,double,ModuleBase::matrix> XC_Functional::v_xc_libxc(		// Peiz
         #ifdef _OPENMP
         #pragma omp parallel for collapse(2) reduction(+:etxc) schedule(static, 256)
         #endif
-        for( int is=0; is<nspin; ++is )
-            for( int ir=0; ir< nrxx; ++ir )
-                etxc += ModuleBase::e2 * exc[ir] * rho[ir*nspin+is] * sgn[ir*nspin+is];
+        for( int is=0; is<nspin; ++is ) {
+            for( int ir=0; ir< nrxx; ++ir ) {
+                //etxc += ModuleBase::e2 * exc[ir] * rho[ir*nspin+is] * sgn[ir*nspin+is];
+                if (rho[ir*nspin+is] > 1e-10) {
+                    etxc += ModuleBase::e2 * exc[ir] * rho[ir*nspin+is];
+                }
+            }
+        }
 
         #ifdef _OPENMP
         #pragma omp parallel for collapse(2) reduction(+:vtxc) schedule(static, 256)
