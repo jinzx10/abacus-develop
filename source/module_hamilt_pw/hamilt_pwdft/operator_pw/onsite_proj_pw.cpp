@@ -71,7 +71,7 @@ void OnsiteProj<OperatorPW<T, Device>>::init(const int ik_in)
 // this function sum up each non-local pseudopotential located on each atom,
 //--------------------------------------------------------------------------
 template<typename T, typename Device>
-void OnsiteProj<OperatorPW<T, Device>>::add_onsite_proj(T *hpsi_in, const int npol, const int m) const
+void OnsiteProj<OperatorPW<T, Device>>::add_onsite_proj(T *hpsi_in, const int npol, const int m, const int npwx) const
 {
     ModuleBase::timer::tick("OnsiteProj", "add_onsite_proj");
 
@@ -80,7 +80,6 @@ void OnsiteProj<OperatorPW<T, Device>>::add_onsite_proj(T *hpsi_in, const int np
     //std::cout << "use of tab_atomic at " << __FILE__ << ": " << __LINE__ << std::endl;
     const std::complex<double>* tab_atomic = onsite_p->get_tab_atomic();
     const int npw = onsite_p->get_npw();
-    const int npwx = onsite_p->get_npwx();
     char transa = 'N';
     char transb = 'T';
     int npm = m;
@@ -104,12 +103,12 @@ void OnsiteProj<OperatorPW<T, Device>>::add_onsite_proj(T *hpsi_in, const int np
 }
 
 template<typename T, typename Device>
-void OnsiteProj<OperatorPW<T, Device>>::update_becp(const T *psi_in, const int npol, const int m) const
+void OnsiteProj<OperatorPW<T, Device>>::update_becp(const T *psi_in, const int npol, const int m, const int npwx) const
 {
     auto* onsite_p = projectors::OnsiteProjector<double, Device>::get_instance();
     // calculate <alpha|psi> 
     // std::cout << __FILE__ << ":" << __LINE__ << " nbands = " << m << std::endl;
-    onsite_p->overlap_proj_psi(m, psi_in);
+    onsite_p->overlap_proj_psi(m, psi_in, npwx);
 }
 
 template<typename T, typename Device>
@@ -131,13 +130,14 @@ void OnsiteProj<OperatorPW<T, Device>>::cal_ps_delta_spin(const int npol, const 
         this->nkb_m = m * tnp;
     }
     setmem_complex_op()(this->ctx, this->ps, 0, tnp * m);
+    const int spin_fold = npol * npol;
 
     if(!this->init_delta_spin)
     {
         this->init_delta_spin = true;
         //prepare ip_iat and lambda_coeff
         resmem_int_op()(this->ctx, this->ip_iat, onsite_p->get_tot_nproj());
-        resmem_complex_op()(this->ctx, this->lambda_coeff, this->ucell->nat * 4);
+        resmem_complex_op()(this->ctx, this->lambda_coeff, this->ucell->nat * spin_fold);
         std::vector<int> ip_iat0(onsite_p->get_tot_nproj());
         int ip0 = 0;
         for(int iat=0;iat<this->ucell->nat;iat++)
@@ -151,7 +151,8 @@ void OnsiteProj<OperatorPW<T, Device>>::cal_ps_delta_spin(const int npol, const 
     }
 
     // prepare array of nh_iat and lambda_array to pass to the onsite_ps_op operator
-    std::vector<std::complex<double>> tmp_lambda_coeff(this->ucell->nat * 4);
+    std::vector<std::complex<double>> tmp_lambda_coeff(this->ucell->nat * spin_fold);
+    if(npol == 2)
     for(int iat=0;iat<this->ucell->nat;iat++)
     {
         tmp_lambda_coeff[iat * 4] = std::complex<double>(lambda[iat][2], 0.0);
@@ -159,7 +160,15 @@ void OnsiteProj<OperatorPW<T, Device>>::cal_ps_delta_spin(const int npol, const 
         tmp_lambda_coeff[iat * 4 + 2] = std::complex<double>(lambda[iat][0], -1 * lambda[iat][1]);
         tmp_lambda_coeff[iat * 4 + 3] = std::complex<double>(-1 * lambda[iat][2], 0.0);
     }
-    syncmem_complex_h2d_op()(this->ctx, this->cpu_ctx, this->lambda_coeff, tmp_lambda_coeff.data(), this->ucell->nat * 4);
+    else if(npol == 1)
+    {
+        const int sign = this->isk[this->ik] == 0 ? 1 : -1;
+        for(int iat=0;iat<this->ucell->nat;iat++)
+        {
+            tmp_lambda_coeff[iat] = std::complex<double>(lambda[iat][2] * sign, 0.0);
+        }
+    }
+    syncmem_complex_h2d_op()(this->ctx, this->cpu_ctx, this->lambda_coeff, tmp_lambda_coeff.data(), this->ucell->nat * spin_fold);
     // TODO: code block above should be moved to the init function
 
     hamilt::onsite_ps_op<Real, Device>()(
@@ -358,10 +367,10 @@ void OnsiteProj<OperatorPW<T, Device>>::cal_ps_dftu(const int npol, const int m)
 }
 
 template<>
-void OnsiteProj<OperatorPW<std::complex<float>, base_device::DEVICE_CPU>>::add_onsite_proj(std::complex<float> *hpsi_in, const int npol, const int m) const
+void OnsiteProj<OperatorPW<std::complex<float>, base_device::DEVICE_CPU>>::add_onsite_proj(std::complex<float> *hpsi_in, const int npol, const int m, const int npwx) const
 {}
 template<>
-void OnsiteProj<OperatorPW<std::complex<float>, base_device::DEVICE_CPU>>::update_becp(const std::complex<float> *psi_in, const int npol, const int m) const
+void OnsiteProj<OperatorPW<std::complex<float>, base_device::DEVICE_CPU>>::update_becp(const std::complex<float> *psi_in, const int npol, const int m, const int npwx) const
 {}
 template<>
 void OnsiteProj<OperatorPW<std::complex<float>, base_device::DEVICE_CPU>>::cal_ps_delta_spin(const int npol, const int m) const
@@ -396,12 +405,12 @@ void OnsiteProj<OperatorPW<T, Device>>::act(
 {
     ModuleBase::timer::tick("Operator", "OnsiteProjPW");
 
-    this->update_becp(tmpsi_in, npol, nbands);
+    this->update_becp(tmpsi_in, npol, nbands, nbasis/npol);
 
     this->cal_ps_delta_spin(npol, nbands);
     this->cal_ps_dftu(npol, nbands);
 
-    this->add_onsite_proj(tmhpsi, npol, nbands);
+    this->add_onsite_proj(tmhpsi, npol, nbands, nbasis/npol);
 
     ModuleBase::timer::tick("Operator", "OnsiteProjPW");
 }

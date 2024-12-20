@@ -806,11 +806,11 @@ void ESolver_KS_PW<T, Device>::iter_finish(const int iter, const bool conv_elec)
     }
     if(PARAM.inp.sc_mag_switch)
     {
-        if(this->drho > 0 && this->drho < PARAM.inp.scf_thr * 10.0 && PARAM.inp.gga_grad == 2)
-        {
-            XC_Functional::gga_grad = 1;
-            this->p_chgmix->mixing_restart_step = iter + 1;
-        }
+        //if(this->drho > 0 && this->drho < PARAM.inp.scf_thr && PARAM.inp.gga_grad == 2)
+        //{
+        //    XC_Functional::gga_grad = 1;
+        //    this->p_chgmix->mixing_restart_step = iter + 1;
+        //}
         SpinConstrain<std::complex<double>>& sc = SpinConstrain<std::complex<double>>::getScInstance();
         if(!sc.higher_mag_prec)
         {
@@ -868,7 +868,7 @@ void ESolver_KS_PW<T, Device>::after_scf(const int istep) {
     if(GlobalV::onsite_radius > 0)
     { // float type has not been implemented
         auto* onsite_p = projectors::OnsiteProjector<double, Device>::get_instance();
-        onsite_p->cal_occupations(reinterpret_cast<psi::Psi<std::complex<double>, Device>*>(this->kspw_psi), this->pelec->wg);
+        onsite_p->cal_occupations(reinterpret_cast<psi::Psi<std::complex<double>, Device>*>(this->kspw_psi), this->pelec->wg, this->pelec->klist->isk.data());
     }
 
     ModuleIO::output_convergence_after_scf(this->conv_elec,
